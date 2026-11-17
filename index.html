@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Staff Frontend Engineer Interview Guide</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0f1419;
+      --bg-elevated: #1a222d;
+      --bg-card: #151c26;
+      --bg-code: #0a0e13;
+      --border: #2a3544;
+      --border-subtle: #1e2836;
+      --text: #e8edf4;
+      --text-muted: #8b9cb3;
+      --text-dim: #5c6d82;
+      --accent: #3d9cf0;
+      --accent-soft: rgba(61, 156, 240, 0.12);
+      --accent-glow: rgba(61, 156, 240, 0.25);
+      --teal: #2dd4a8;
+      --teal-soft: rgba(45, 212, 168, 0.12);
+      --amber: #f0b429;
+      --amber-soft: rgba(240, 180, 41, 0.12);
+      --rose: #f07178;
+      --rose-soft: rgba(240, 113, 120, 0.12);
+      --violet: #a78bfa;
+      --violet-soft: rgba(167, 139, 250, 0.12);
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+      --nav-width: 280px;
+      --font-sans: "DM Sans", system-ui, sans-serif;
+      --font-display: "Fraunces", Georgia, serif;
+      --font-mono: "JetBrains Mono", ui-monospace, monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: 2rem;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Ambient background */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 10% -10%, rgba(61, 156, 240, 0.15), transparent),
+        radial-gradient(ellipse 60% 40% at 90% 10%, rgba(45, 212, 168, 0.08), transparent),
+        radial-gradient(ellipse 50% 30% at 50% 100%, rgba(167, 139, 250, 0.06), transparent);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .layout {
+      display: flex;
+      min-height: 100vh;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: var(--nav-width);
+      height: 100vh;
+      background: rgba(15, 20, 25, 0.85);
+      backdrop-filter: blur(16px);
+      border-right: 1px solid var(--border-subtle);
+      overflow-y: auto;
+      padding: 1.5rem 0;
+      z-index: 100;
+      transition: transform 0.25s ease;
+    }
+
+    .sidebar-brand {
+      padding: 0 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--border-subtle);
+      margin-bottom: 1rem;
+    }
+
+    .sidebar-brand .badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 0.25rem 0.6rem;
+      border-radius: 999px;
+      margin-bottom: 0.6rem;
+    }
+
+    .sidebar-brand h1 {
+      font-family: var(--font-display);
+      font-size: 1.15rem;
+      font-weight: 600;
+      line-height: 1.3;
+      color: var(--text);
+    }
+
+    .nav-list {
+      list-style: none;
+      padding: 0 0.75rem;
+    }
+
+    .nav-list a {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.65rem;
+      padding: 0.55rem 0.75rem;
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.82rem;
+      line-height: 1.35;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .nav-list a:hover {
+      background: var(--accent-soft);
+      color: var(--text);
+    }
+
+    .nav-list a.active {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .nav-num {
+      flex-shrink: 0;
+      width: 1.4rem;
+      height: 1.4rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text-dim);
+    }
+
+    a.active .nav-num {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    /* Main */
+    .main {
+      margin-left: var(--nav-width);
+      flex: 1;
+      max-width: 920px;
+      padding: 2.5rem 3rem 5rem;
+    }
+
+    /* Hero */
+    .hero {
+      margin-bottom: 3rem;
+      padding-bottom: 2.5rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .hero-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--teal);
+      margin-bottom: 0.75rem;
+    }
+
+    .hero h1 {
+      font-family: var(--font-display);
+      font-size: clamp(2rem, 4vw, 2.75rem);
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+      background: linear-gradient(135deg, #fff 0%, #a8c5e0 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero p {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      max-width: 560px;
+    }
+
+    .hero-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 1.5rem;
+    }
+
+    .tag {
+      font-size: 0.75rem;
+      font-weight: 500;
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      background: var(--bg-card);
+    }
+
+    /* Sections */
+    .question {
+      margin-bottom: 3.5rem;
+      scroll-margin-top: 2rem;
+    }
+
+    .q-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      margin-bottom: 1.75rem;
+    }
+
+    .q-number {
+      flex-shrink: 0;
+      width: 2.75rem;
+      height: 2.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      font-weight: 600;
+      background: linear-gradient(135deg, var(--accent), #2563eb);
+      color: #fff;
+      border-radius: 10px;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .q-header h2 {
+      font-family: var(--font-display);
+      font-size: 1.45rem;
+      font-weight: 600;
+      line-height: 1.3;
+      padding-top: 0.35rem;
+    }
+
+    .subsection {
+      margin-bottom: 1.75rem;
+    }
+
+    .subsection h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .subsection h3::before {
+      content: "";
+      width: 3px;
+      height: 1em;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    .subsection h4 {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--teal);
+      margin: 1.25rem 0 0.5rem;
+    }
+
+    p { margin-bottom: 0.85rem; color: var(--text-muted); }
+    p strong { color: var(--text); font-weight: 600; }
+
+    ul, ol {
+      margin: 0 0 1rem 1.25rem;
+      color: var(--text-muted);
+    }
+
+    li { margin-bottom: 0.4rem; }
+    li strong { color: var(--text); }
+
+    /* Cards */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 0.85rem;
+      margin: 1rem 0 1.5rem;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem 1.2rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent-soft), var(--shadow);
+    }
+
+    .card .card-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 0.4rem;
+    }
+
+    .card.csr .card-label { color: var(--accent); }
+    .card.ssr .card-label { color: var(--teal); }
+    .card.ssg .card-label { color: var(--amber); }
+    .card.isr .card-label { color: var(--violet); }
+
+    .card p {
+      font-size: 0.85rem;
+      margin: 0;
+      line-height: 1.5;
+    }
+
+    /* Table */
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1rem 0 1.5rem;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    th {
+      background: var(--bg-elevated);
+      text-align: left;
+      padding: 0.75rem 1rem;
+      font-weight: 600;
+      color: var(--text);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 0.7rem 1rem;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      vertical-align: top;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(61, 156, 240, 0.04); }
+
+    td:first-child {
+      font-weight: 600;
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+    }
+
+    /* Callouts */
+    .callout {
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      margin: 1rem 0 1.5rem;
+      border-left: 3px solid;
+      font-size: 0.9rem;
+    }
+
+    .callout.tip {
+      background: var(--teal-soft);
+      border-color: var(--teal);
+    }
+
+    .callout.warn {
+      background: var(--amber-soft);
+      border-color: var(--amber);
+    }
+
+    .callout.danger {
+      background: var(--rose-soft);
+      border-color: var(--rose);
+    }
+
+    .callout.info {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+    }
+
+    .callout .callout-title {
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.35rem;
+      font-size: 0.85rem;
+    }
+
+    .callout p { margin: 0; font-size: 0.875rem; }
+
+    /* Decision tree */
+    .tree {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      margin: 1rem 0 1.5rem;
+      overflow-x: auto;
+    }
+
+    .tree pre {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      line-height: 1.55;
+      color: var(--text-muted);
+      white-space: pre;
+      margin: 0;
+    }
+
+    .tree .hl { color: var(--accent); font-weight: 500; }
+    .tree .yes { color: var(--teal); }
+    .tree .no { color: var(--rose); }
+
+    /* Q&A blocks */
+    .qa {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin: 0.85rem 0;
+      overflow: hidden;
+    }
+
+    .qa-q {
+      padding: 0.9rem 1.2rem;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border-subtle);
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: var(--text);
+      display: flex;
+      gap: 0.6rem;
+      align-items: flex-start;
+    }
+
+    .qa-q::before {
+      content: "Q";
+      flex-shrink: 0;
+      width: 1.4rem;
+      height: 1.4rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 700;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+    }
+
+    .qa-a {
+      padding: 1rem 1.2rem;
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    .qa-a::before {
+      content: "A — ";
+      font-weight: 600;
+      color: var(--teal);
+    }
+
+    /* Code */
+    pre.code {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem 1.25rem;
+      overflow-x: auto;
+      margin: 1rem 0 1.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      line-height: 1.6;
+      color: #c8d4e0;
+    }
+
+    code {
+      font-family: var(--font-mono);
+      font-size: 0.85em;
+      background: var(--bg-elevated);
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+      color: var(--amber);
+      border: 1px solid var(--border-subtle);
+    }
+
+    pre.code code {
+      background: none;
+      padding: 0;
+      border: none;
+      color: inherit;
+      font-size: inherit;
+    }
+
+    /* Flow steps */
+    .flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin: 1rem 0 1.5rem;
+    }
+
+    .flow-step {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+
+    .flow-rail {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 1.5rem;
+      flex-shrink: 0;
+    }
+
+    .flow-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent-glow);
+      margin-top: 0.4rem;
+    }
+
+    .flow-line {
+      width: 2px;
+      flex: 1;
+      background: var(--border);
+      min-height: 1.2rem;
+    }
+
+    .flow-step:last-child .flow-line { display: none; }
+
+    .flow-content {
+      padding-bottom: 1rem;
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    /* Metric pills */
+    .metrics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin: 0.75rem 0 1.25rem;
+    }
+
+    .metric {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.6rem 0.9rem;
+      text-align: center;
+      min-width: 100px;
+    }
+
+    .metric .val {
+      font-family: var(--font-mono);
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--teal);
+    }
+
+    .metric .lbl {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      margin-top: 0.15rem;
+    }
+
+    /* Mobile toggle */
+    .menu-toggle {
+      display: none;
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 200;
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text);
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+    }
+
+    .overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 90;
+    }
+
+    .overlay.open { display: block; }
+
+    /* Footer */
+    .footer {
+      margin-top: 2rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--border-subtle);
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.8rem;
+    }
+
+    @media (max-width: 900px) {
+      .sidebar {
+        transform: translateX(-100%);
+      }
+      .sidebar.open {
+        transform: translateX(0);
+      }
+      .main {
+        margin-left: 0;
+        padding: 1.5rem 1.25rem 4rem;
+      }
+      .menu-toggle { display: flex; }
+      .tree pre { font-size: 0.6rem; }
+    }
+  </style>
+</head>
+<body>
+  <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">☰</button>
+  <div class="overlay" id="overlay"></div>
+
+  <div class="layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="badge">Staff Level</div>
+        <h1>Frontend Interview Guide</h1>
+      </div>
+      <ul class="nav-list">
+        <li><a href="#q1"><span class="nav-num">01</span> Rendering Strategies</a></li>
+        <li><a href="#q2"><span class="nav-num">02</span> Performance &amp; CDN</a></li>
+        <li><a href="#q3"><span class="nav-num">03</span> Storage &amp; Security</a></li>
+        <li><a href="#q4"><span class="nav-num">04</span> React State &amp; Filters</a></li>
+        <li><a href="#q5"><span class="nav-num">05</span> Measurement &amp; Analytics</a></li>
+        <li><a href="#q6"><span class="nav-num">06</span> Testing Strategies</a></li>
+        <li><a href="#q7"><span class="nav-num">07</span> React Evolution</a></li>
+        <li><a href="#q8"><span class="nav-num">08</span> Event Loop &amp; VDOM</a></li>
+        <li><a href="#q9"><span class="nav-num">09</span> CSS, a11y &amp; Paint</a></li>
+        <li><a href="#q10"><span class="nav-num">10</span> Micro-Frontends</a></li>
+        <li><a href="#q11"><span class="nav-num">11</span> Frameworks &amp; Networking</a></li>
+      </ul>
+    </nav>
+
+    <main class="main">
+      <header class="hero">
+        <div class="hero-label">Production-Grade Technical Reference</div>
+        <h1>Staff Frontend Engineer Interview Guide</h1>
+        <p>A comprehensive reference for modern web architecture, JavaScript/TypeScript internals, performance optimization, and browser APIs.</p>
+        <div class="hero-tags">
+          <span class="tag">CSR · SSR · SSG · ISR</span>
+          <span class="tag">Core Web Vitals</span>
+          <span class="tag">React 16–19</span>
+          <span class="tag">Event Loop</span>
+          <span class="tag">Security</span>
+          <span class="tag">CDN Architecture</span>
+        </div>
+      </header>
+
+      <!-- Q1 -->
+      <section class="question" id="q1">
+        <div class="q-header">
+          <div class="q-number">01</div>
+          <h2>Rendering Strategies Deep Dive<br /><span style="font-size:0.7em;font-weight:500;color:var(--text-muted);font-family:var(--font-sans)">CSR vs SSR vs SSG vs ISR</span></h2>
+        </div>
+
+        <div class="subsection">
+          <h3>Executive Summary &amp; Core Definitions</h3>
+          <p>Rendering strategies determine <strong>where and when</strong> HTML markup and JavaScript code execution occur relative to a client request. The choice directly affects Core Web Vitals (TTFB, FCP, LCP, CLS), infrastructure costs, and search engine indexability.</p>
+
+          <div class="card-grid">
+            <div class="card csr">
+              <div class="card-label">CSR</div>
+              <p>Server sends a bare HTML shell. Browser downloads, parses, and executes JS which constructs the DOM and fetches API data dynamically.</p>
+            </div>
+            <div class="card ssr">
+              <div class="card-label">SSR</div>
+              <p>Server dynamically generates complete HTML on every request by executing server-side JS and resolving data fetches before responding.</p>
+            </div>
+            <div class="card ssg">
+              <div class="card-label">SSG</div>
+              <p>HTML pages are pre-rendered entirely at build time. Static files are deployed directly to a CDN edge node.</p>
+            </div>
+            <div class="card isr">
+              <div class="card-label">ISR</div>
+              <p>Extension of SSG that regenerates or updates static pages in the background on-demand or per revalidation interval.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <h3>Architectural Comparison Matrix</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Strategy</th>
+                  <th>Execution Environment</th>
+                  <th>TTFB</th>
+                  <th>Ideal Use Case</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>CSR</td>
+                  <td>Browser</td>
+                  <td>Fast (static shell)</td>
+                  <td>Authenticated dashboards, SaaS apps, internal tools</td>
+                </tr>
+                <tr>
+                  <td>SSR</td>
+                  <td>Node.js / Edge Server</td>
+                  <td>Slower (DB/API bound)</td>
+                  <td>Dynamic e-commerce, news feeds, personalized portals</td>
+                </tr>
+                <tr>
+                  <td>SSG</td>
+                  <td>Build Engine / CI/CD</td>
+                  <td>Ultra-Fast (CDN edge)</td>
+                  <td>Blogs, docs, marketing landing pages</td>
+                </tr>
+                <tr>
+                  <td>ISR</td>
+                  <td>CDN Edge + Node Engine</td>
+                  <td>Ultra-Fast (stale cache)</td>
+                  <td>Product catalogs (10k+ pages), dynamic blogs</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <h3>In-Depth Breakdown &amp; Technical Mechanics</h3>
+
+          <h4>1. Client-Side Rendering (CSR)</h4>
+          <div class="flow">
+            <div class="flow-step">
+              <div class="flow-rail"><div class="flow-dot"></div><div class="flow-line"></div></div>
+              <div class="flow-content">Client requests URL → Server returns <code>&lt;div id="app"&gt;</code> + JS bundle</div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-rail"><div class="flow-dot"></div><div class="flow-line"></div></div>
+              <div class="flow-content">Browser parses JS → Client makes API calls → React/Vue updates DOM</div>
+            </div>
+          </div>
+          <p><strong>Performance:</strong> High TTI and LCP latency on low-end devices due to network waterfalling (HTML → JS → API → Render). Zero server compute per request. Hydration: N/A.</p>
+
+          <h4>2. Server-Side Rendering (SSR)</h4>
+          <div class="flow">
+            <div class="flow-step">
+              <div class="flow-rail"><div class="flow-dot"></div><div class="flow-line"></div></div>
+              <div class="flow-content">Server executes component logic &amp; data fetching → streams/sends HTML string</div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-rail"><div class="flow-dot"></div><div class="flow-line"></div></div>
+              <div class="flow-content">Client renders HTML instantly → downloads JS → browser hydrates DOM</div>
+            </div>
+          </div>
+          <div class="callout warn">
+            <div class="callout-title">Hydration Pitfall — “Uncanny Valley”</div>
+            <p>Users see complete UI quickly (fast FCP), but click events do not respond until hydration JS finishes attaching listeners.</p>
+          </div>
+          <p><strong>Bottlenecks:</strong> High server CPU; TTFB bound by slowest upstream API unless using Streaming SSR (React 18 Suspense).</p>
+
+          <h4>3. Static Site Generation (SSG)</h4>
+          <p>Build pipeline runs <code>getStaticProps</code> → compiles all routes into HTML + JSON → assets pushed to S3/CDN. Near 0ms TTFB globally; highly resilient to traffic spikes.</p>
+          <p><strong>Trade-off:</strong> Build times scale linearly with page count (O(N)). Unsuitable for highly dynamic sub-second data.</p>
+
+          <h4>4. Incremental Static Regeneration (ISR)</h4>
+          <ol>
+            <li>User requests <code>/products/123</code> — CDN serves cached static HTML</li>
+            <li>If revalidate time (e.g. 60s) has passed, serve stale content while triggering background regeneration</li>
+            <li>Once regenerated, CDN edge cache updates globally</li>
+            <li><strong>On-Demand Invalidation:</strong> Event-driven cache purging via webhooks (CMS update → tag invalidation)</li>
+          </ol>
+        </div>
+
+        <div class="subsection">
+          <h3>Staff-Level Architecture Decision Tree</h3>
+          <div class="tree">
+            <pre>Is content unique per user (Authenticated)?
+              <span class="yes">/</span>                    <span class="no">\</span>
+           <span class="yes">Yes</span>                      <span class="no">No</span>
+            /                          \
+<span class="hl">CSR / SSR with Edge Auth</span>    Is data dynamic or real-time?
+                                      <span class="yes">/</span>              <span class="no">\</span>
+                                   <span class="yes">Yes</span>                <span class="no">No</span>
+                                    /                    \
+                    Is scale &gt; 10,000 pages?         <span class="hl">SSG (CDN)</span>
+                          <span class="yes">/</span>         <span class="no">\</span>
+                       <span class="yes">Yes</span>          <span class="no">No</span>
+                        /              \
+                 <span class="hl">ISR / Hybrid</span>    <span class="hl">SSR / Streaming SSR</span></pre>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <h3>Interviewer Follow-Ups</h3>
+          <div class="qa">
+            <div class="qa-q">How does Streaming SSR with HTML Shell differ from traditional SSR?</div>
+            <div class="qa-a">Traditional SSR blocks the entire document until all data requests finish (<code>renderToString</code>). Streaming SSR (<code>renderToReadableStream</code> / React 18 Suspense) sends an initial HTML shell immediately, streaming chunks as backend promises resolve — reducing TTFB and enabling Selective Hydration.</div>
+          </div>
+          <div class="qa">
+            <div class="qa-q">What is the “Hydration Mismatch” error and how do you resolve it?</div>
+            <div class="qa-a">Occurs when server DOM ≠ client initial render (e.g. <code>window.innerWidth</code>, dynamic IDs, timestamps). Browser discards server nodes and re-renders from scratch. Fix: deferred client-side rendering via layout effects, or ensure deterministic data access.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Q2 -->
+      <section class="question" id="q2">
+        <div class="q-header">
+          <div class="q-number">02</div>
+          <h2>Web Performance &amp; CDN Architecture</h2>
+        </div>
+
+        <div class="subsection">
+          <h3>Techniques to Optimize Page Landing Speed</h3>
+          <ul>
+            <li><strong>Critical Rendering Path:</strong> Inline critical CSS, defer non-critical JS via <code>defer</code>/<code>async</code>, preconnect to third-party domains (<code>&lt;link rel="preconnect"&gt;</code>)</li>
+            <li><strong>Resource Prioritization:</strong> Route-based code splitting, dynamic <code>import()</code>, adaptive preloading (<code>&lt;link rel="preload"&gt;</code>), AVIF/WebP with <code>srcset</code></li>
+            <li><strong>Caching &amp; Edge:</strong> Serve static assets via Edge CDNs, immutable caching (<code>Cache-Control: public, max-age=31536000, immutable</code>), HTTP/2 multiplexing, HTTP/3 QUIC, Brotli</li>
+          </ul>
+        </div>
+
+        <div class="subsection">
+          <h3>CDN Internal Mechanics &amp; Cache Invalidation</h3>
+          <p><strong>How a CDN works:</strong> Anycast DNS routes clients to the nearest PoP edge node. On cache miss, the edge proxies to origin, caches the response per headers, and serves subsequent hits from memory/SSD.</p>
+          <p><strong>What to cache at the edge:</strong> Content-hashed JS/CSS bundles, media, static HTML, public REST/GraphQL endpoints, web fonts.</p>
+          <p><strong>Invalidation mechanisms:</strong></p>
+          <ul>
+            <li><strong>Cache Busting</strong> — content-addressed filenames (<code>main.a1b2c3.js</code>)</li>
+            <li><strong>Programmatic Purging</strong> — API-driven URL/Tag invalidation</li>
+            <li><strong>Revalidation</strong> — <code>stale-while-revalidate</code> or conditional ETag / If-None-Match</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Q3 -->
+      <section class="question" id="q3">
+        <div class="q-header">
+          <div class="q-number">03</div>
+          <h2>Client-Side Storage, Auth Tokens &amp; Security<br /><span style="font-size:0.7em;font-weight:500;color:var(--text-muted);font-family:var(--font-sans)">XSS vs CSRF</span></h2>
+        </div>
+
+        <div class="subsection">
+          <h3>Storage Mechanisms &amp; Token Architecture</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Mechanism</th><th>Characteristics</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>localStorage</td><td>Persistent key-value, synchronous</td></tr>
+                <tr><td>sessionStorage</td><td>Tab-scoped key-value</td></tr>
+                <tr><td>Cookies</td><td>Sent with HTTP requests; supports Secure attributes</td></tr>
+                <tr><td>IndexedDB</td><td>Async transactional NoSQL for large structured / offline data</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="callout tip">
+            <div class="callout-title">Token Storage Best Practice</div>
+            <p>Store tokens in <strong>HttpOnly, Secure, SameSite=Strict/Lax</strong> cookies. Access tokens in JS memory + HttpOnly refresh cookies = optimal balance.</p>
+          </div>
+          <div class="callout danger">
+            <div class="callout-title">Security Trade-offs</div>
+            <p><code>localStorage</code> is fully vulnerable to XSS (any injected script can read tokens). Cookies mitigate XSS exfiltration via HttpOnly but introduce CSRF if not guarded by SameSite or CSRF tokens.</p>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <h3>XSS and CSRF Deep Dive</h3>
+          <h4>Cross-Site Scripting (XSS)</h4>
+          <p>Malicious JS executes in the user’s browser (Stored, Reflected, or DOM-based).</p>
+          <p><strong>Mitigations:</strong> Context-aware output encoding, CSP headers, avoid <code>dangerouslySetInnerHTML</code>, sanitize with DOMPurify.</p>
+
+          <h4>Cross-Site Request Forgery (CSRF)</h4>
+          <p>A malicious site tricks the browser into executing an unwanted action on a trusted authenticated site.</p>
+          <p><strong>Mitigations:</strong> SameSite=Strict/Lax cookies, anti-CSRF tokens (Synchronizer Token Pattern), custom Authorization headers (<code>Bearer</code>), CORS policy.</p>
+        </div>
+      </section>
+
+      <!-- Q4 -->
+      <section class="question" id="q4">
+        <div class="q-header">
+          <div class="q-number">04</div>
+          <h2>React State Architecture &amp; URL-Driven Filters</h2>
+        </div>
+
+        <div class="subsection">
+          <h3>State Management Solutions</h3>
+          <ul>
+            <li><strong>Local State</strong> (<code>useState</code> / <code>useReducer</code>) — High encapsulation, zero boilerplate; limited to localized UI; prop-drilling risk</li>
+            <li><strong>Context API</strong> — Built-in DI for static/low-frequency global state (theme, locale); re-renders all consumers on any change</li>
+            <li><strong>Global Store</strong> (Redux Toolkit / Zustand / Recoil) — Centralized predictable tree, unidirectional flow, selector subscriptions</li>
+            <li><strong>Server State</strong> (React Query / RTK Query) — Decouples fetching, polling, caching, optimistic updates from UI logic</li>
+          </ul>
+        </div>
+
+        <div class="subsection">
+          <h3>Managing Search &amp; Filter State</h3>
+          <div class="callout info">
+            <div class="callout-title">URL Search Parameters = Gold Standard</div>
+            <p>Query strings for complex catalog/search filtering enable deep linking, back/forward history, and shareable URLs. Prefer over global store unless filters must persist across unmounted layouts without polluting public URLs.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Q5 -->
+      <section class="question" id="q5">
+        <div class="q-header">
+          <div class="q-number">05</div>
+          <h2>Web Performance Measurement &amp; Funnel Analytics</h2>
+        </div>
+
+        <div class="subsection">
+          <h3>Methodologies for Measuring Performance</h3>
+          <p><strong>Field Data (RUM):</strong> Real users via CrUX or PerformanceObserver / web-vitals. True Core Web Vitals across diverse networks/devices.</p>
+          <div class="metrics">
+            <div class="metric"><div class="val">&lt;2.5s</div><div class="lbl">LCP</div></div>
+            <div class="metric"><div class="val">&lt;200ms</div><div class="lbl">INP</div></div>
+            <div class="metric"><div class="val">&lt;0.1</div><div class="lbl">CLS</div></div>
+          </div>
+          <p><strong>Synthetic (Lab):</strong> Lighthouse, WebPageTest, Playwright — ideal for CI/CD regression testing, flamegraphs, memory-leak debugging.</p>
+        </div>
+
+        <div class="subsection">
+          <h3>Funnel Analytics Pipeline</h3>
+          <p><strong>Event schema:</strong> <code>search_executed</code> → <code>item_viewed</code> → <code>booking_initiated</code> → <code>payment_completed</code></p>
+          <p><strong>Implementation:</strong> Use <code>navigator.sendBeacon()</code> or background workers to transmit without blocking unload. Attach unified context (sessionId, userId, correlationId, timestamp, device metadata).</p>
+          <p><strong>Drop-off analysis:</strong> Step Conversion % = (Count(Step_N) / Count(Step_N-1)) × 100 — aggregate in Snowflake / BigQuery.</p>
+        </div>
+      </section>
+
+      <!-- Q6 -->
+      <section class="question" id="q6">
+        <div class="q-header">
+          <div class="q-number">06</div>
+          <h2>Frontend Testing Strategies &amp; Flaky Dependencies</h2>
+        </div>
+
+        <div class="subsection">
+          <h3>Testing Pyramid</h3>
+          <ul>
+            <li><strong>Unit</strong> (Vitest/Jest) — Pure functions, hooks, utilities; near-instant feedback</li>
+            <li><strong>Integration</strong> (React Testing Library) — User-perspective DOM interactions via accessible roles; no implementation mocking</li>
+            <li><strong>E2E</strong> (Playwright/Cypress) — Multi-step critical journeys across real browsers</li>
+          </ul>
+        </div>
+
+        <div class="subsection">
+          <h3>Isolating External Dependencies</h3>
+          <ul>
+            <li><strong>MSW (Mock Service Worker)</strong> — Intercepts HTTP/GraphQL at the Service Worker level; keeps app code identical in dev and test</li>
+            <li><strong>Module Spies</strong> (<code>vi.mock()</code> / <code>jest.mock()</code>) — Replace third-party SDKs (analytics, payments) for deterministic suites</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Q7 -->
+      <section class="question" id="q7">
+        <div class="q-header">
+          <div class="q-number">07</div>
+          <h2>Evolutionary Architecture of React<br /><span style="font-size:0.7em;font-weight:500;color:var(--text-muted);font-family:var(--font-sans)">v16 → v18 &amp; Beyond</span></h2>
+        </div>
+
+        <div class="subsection">
+          <h3>Release Matrix &amp; Key Features</h3>
+          <div class="card-grid">
+            <div class="card csr">
+              <div class="card-label">React 16</div>
+              <p>Fiber reconciler, Hooks (16.8), Error Boundaries, Portals, Fragments</p>
+            </div>
+            <div class="card ssg">
+              <div class="card-label">React 17</div>
+              <p>“Stepping stone” — delegated events to root container; gradual upgrades; cross-version nesting</p>
+            </div>
+            <div class="card ssr">
+              <div class="card-label">React 18</div>
+              <p>Concurrent React, Automatic Batching, useTransition / useDeferredValue, Streaming SSR, useId</p>
+            </div>
+            <div class="card isr">
+              <div class="card-label">React 19+</div>
+              <p>Server Components (RSC), Server Actions, React Compiler (auto-memoization)</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Q8 -->
+      <section class="question" id="q8">
+        <div class="q-header">
+          <div class="q-number">08</div>
+          <h2>JavaScript Runtime Internals<br /><span style="font-size:0.7em;font-weight:500;color:var(--text-muted);font-family:var(--font-sans)">Event Loop &amp; Virtual DOM</span></h2>
+        </div>
+
+        <div class="subsection">
+          <h3>Event Loop &amp; Task Queue Lifecycle</h3>
+          <ul>
+            <li><strong>Call Stack</strong> — Single-threaded execution tracking active frames</li>
+            <li><strong>Microtask Queue</strong> — Promises, <code>queueMicrotask()</code>, MutationObserver. Drained entirely before yielding</li>
+            <li><strong>Macrotask Queue</strong> — <code>setTimeout</code>, <code>setInterval</code>, I/O, user input. One task per loop iteration</li>
+            <li><strong>Render Steps</strong> — Style calc, layout, paint (synced with <code>requestAnimationFrame</code>) before next macrotask</li>
+          </ul>
+        </div>
+
+        <div class="subsection">
+          <h3>V8 Engine Pipeline &amp; Virtual DOM</h3>
+          <p><strong>V8:</strong> Source → Parser → AST → Ignition Interpreter (bytecode) → TurboFan JIT (hot paths → machine code, with de-opt fallbacks)</p>
+          <p><strong>Virtual DOM:</strong> In-memory JSON of the real DOM. On state change, React builds a new tree, runs Diffing (O(N) heuristic via stable keys + element type), batches real DOM mutations.</p>
+        </div>
+      </section>
+
+      <!-- Q9 -->
+      <section class="question" id="q9">
+        <div class="q-header">
+          <div class="q-number">09</div>
+          <h2>Advanced CSS, Accessibility &amp; DOM Painting</h2>
+        </div>
+
+        <div class="subsection">
+          <h3>Core CSS Concepts &amp; Layout</h3>
+          <ul>
+            <li><strong>Specificity:</strong> 3-tuple (Inline, IDs, Classes/Attrs/Pseudo-classes, Elements/Pseudo-elements)</li>
+            <li><strong>Box Model:</strong> <code>content-box</code> adds border/padding outside; <code>border-box</code> includes them in width</li>
+            <li><strong>Grid vs Flexbox:</strong> Grid = 2D layout; Flexbox = 1D directional alignment</li>
+            <li><strong>Animations:</strong> Target GPU properties (<code>transform</code>, <code>opacity</code>) to skip Layout &amp; Paint</li>
+          </ul>
+        </div>
+
+        <div class="subsection">
+          <h3>Browser Rendering Pipeline &amp; a11y</h3>
+          <div class="flow">
+            <div class="flow-step">
+              <div class="flow-rail"><div class="flow-dot"></div><div class="flow-line"></div></div>
+              <div class="flow-content">HTML → DOM + CSS → CSSOM</div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-rail"><div class="flow-dot"></div><div class="flow-line"></div></div>
+              <div class="flow-content">Render Tree Construction</div>
+            </div>
+            <div class="flow-step">
+              <div class="flow-rail"><div class="flow-dot"></div><div class="flow-line"></div></div>
+              <div class="flow-content">Layout (Reflow) → Paint (Rasterization) → Composite (GPU layers)</div>
+            </div>
+          </div>
+          <p><strong>Accessibility:</strong> Semantic HTML (<code>&lt;main&gt;</code>, <code>&lt;nav&gt;</code>, <code>&lt;button&gt;</code>), focus traps for dialogs, ARIA live regions (<code>aria-live="polite"</code>), visible keyboard focus.</p>
+        </div>
+      </section>
+
+      <!-- Q10 -->
+      <section class="question" id="q10">
+        <div class="q-header">
+          <div class="q-number">10</div>
+          <h2>Micro-Frontends, Virtualization &amp; Bundlers</h2>
+        </div>
+
+        <div class="subsection">
+          <h3>Micro-Frontends vs Monoliths</h3>
+          <p>Decompose into independently deployable feature apps managed by separate teams. Integration models: build-time (npm), server-side edge routing, iFrames, <strong>Webpack Module Federation</strong> (runtime).</p>
+          <p><strong>Module Federation:</strong> Dynamically load remote code bundles at runtime without shared build-time compilation or duplicating shared deps (e.g. React).</p>
+        </div>
+
+        <div class="subsection">
+          <h3>List Virtualization &amp; Tooling</h3>
+          <ul>
+            <li><strong>react-window / react-virtualized</strong> — Render only viewport-visible items for massive lists (100k+ rows); reuse nodes on scroll</li>
+            <li><strong>Babel</strong> — Transpiles ESNext/JSX to backward-compatible JS via targets + polyfills (core-js)</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Q11 -->
+      <section class="question" id="q11">
+        <div class="q-header">
+          <div class="q-number">11</div>
+          <h2>Frameworks, CSS Tooling, Networking &amp; JS Concepts</h2>
+        </div>
+
+        <div class="subsection">
+          <h3>Framework Comparison &amp; CSS Ecosystem</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Framework</th><th>Paradigm</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>React</td><td>Unopinionated, Virtual DOM, JSX</td></tr>
+                <tr><td>Vue</td><td>Progressive, Proxy reactivity, SFCs</td></tr>
+                <tr><td>Angular</td><td>Opinionated DI, RxJS, Incremental DOM</td></tr>
+                <tr><td>Svelte / Solid</td><td>Compile-time reactivity; no VDOM runtime</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <ul>
+            <li><strong>SCSS</strong> — Preprocessor (nesting, variables, mixins)</li>
+            <li><strong>PostCSS</strong> — JS plugin transforms (Autoprefixer)</li>
+            <li><strong>Tailwind</strong> — Utility-first; purged minimal CSS bundles</li>
+          </ul>
+        </div>
+
+        <div class="subsection">
+          <h3>HTTP/HTTPS, Generators &amp; Polyfills</h3>
+          <p><strong>TLS Handshake:</strong> TCP 3-way handshake → TLS (key exchange, cert verification, session key) → symmetric payload encryption.</p>
+          <p><strong>Generators:</strong> Functions that <code>yield</code> control, returning iterators <code>{ value, done }</code>.</p>
+          <p><strong>Custom Promise Polyfill:</strong></p>
+          <pre class="code"><code>function CustomPromise(executor) {
+  let onResolve, value, isFulfilled = false;
+  function resolve(val) {
+    value = val; isFulfilled = true;
+    if (typeof onResolve === 'function') onResolve(val);
+  }
+  this.then = function(callback) {
+    onResolve = callback;
+    if (isFulfilled) callback(value);
+    return this;
+  };
+  executor(resolve);
+}</code></pre>
+        </div>
+      </section>
+
+      <footer class="footer">
+        Staff Frontend Engineer Interview Guide · Single-file reference · Open any section from the sidebar
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    const sidebar = document.getElementById('sidebar');
+    const toggle = document.getElementById('menuToggle');
+    const overlay = document.getElementById('overlay');
+    const links = document.querySelectorAll('.nav-list a');
+
+    toggle.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('open');
+    });
+    overlay.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('open');
+    });
+    links.forEach(a => a.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('open');
+    }));
+
+    // Active nav highlighting
+    const sections = document.querySelectorAll('.question');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          links.forEach(l => l.classList.remove('active'));
+          const active = document.querySelector(`.nav-list a[href="#${entry.target.id}"]`);
+          if (active) active.classList.add('active');
+        }
+      });
+    }, { rootMargin: '-20% 0px -60% 0px' });
+    sections.forEach(s => observer.observe(s));
+  </script>
+</body>
+</html>
