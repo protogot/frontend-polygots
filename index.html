@@ -627,7 +627,7 @@
         <h1>Frontend Interview Guide</h1>
       </div>
       <div class="progress-wrap">
-        <div class="progress-label"><span>Reviewed</span><span id="progressText">0 / 11</span></div>
+        <div class="progress-label"><span>Reviewed</span><span id="progressText">0 / 16</span></div>
         <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
       </div>
       <ul class="nav-list" id="navList"></ul>
@@ -2071,6 +2071,56 @@ items.<span class="f">forEach</span>(el =&gt; { el.style.height = el.offsetWidth
           </div>
 
           <div class="subsection">
+            <h3>Bundling: build-time vs runtime integration</h3>
+            <p>The core question is <strong>when the code of one team gets combined with another's</strong>. Combining at build time gives you a single optimised bundle but couples releases. Combining at runtime gives independent deploys but moves dependency resolution and failure handling into the browser.</p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th></th><th>Build-time integration</th><th>Runtime integration</th></tr></thead>
+                <tbody>
+                  <tr><td>How</td><td>npm packages or monorepo imports, resolved and bundled by the host's build</td><td>Module Federation, import maps + native ESM, single-spa, script-loaded Web Components</td></tr>
+                  <tr><td>Who decides the version</td><td>The host, at build time (lockfile)</td><td>Whatever is deployed at the remote URL right now (or a manifest)</td></tr>
+                  <tr><td>Deploy independence</td><td>None: a change ships only when the host rebuilds</td><td>Full: the remote deploys and every host picks it up</td></tr>
+                  <tr><td>Dependency dedupe</td><td>Perfect: one resolution, one copy</td><td>Negotiated at runtime (<code>shared</code> singletons); mismatches mean duplicates or errors</td></tr>
+                  <tr><td>Tree shaking / optimisation</td><td>Across the whole app</td><td>Only within each remote; exposed modules are kept whole</td></tr>
+                  <tr><td>Type safety</td><td>Native TypeScript</td><td>Needs generated or federated type packages</td></tr>
+                  <tr><td>Failure modes</td><td>Caught at compile or CI time</td><td>Remote down, 404 on a chunk, version skew, all discovered in production</td></tr>
+                  <tr><td>Performance</td><td>Best: fewer requests, optimal chunks</td><td>Extra round trips for the manifest and remote entry; a waterfall unless preloaded</td></tr>
+                  <tr><td>Best for</td><td>Design system, shared utilities, a small number of teams</td><td>Large org, separately owned product areas, different release cadences</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <h4>Runtime option 1: Module Federation with a manifest</h4>
+            <p>Hard-coding remote URLs means every environment change needs a host rebuild. A <strong>manifest service</strong> maps remote names to versioned URLs, so promoting or rolling back a remote is a config change, not a deploy.</p>
+            <pre class="code" data-lang="ts"><code><span class="c">// Module Federation 2.0 runtime API: remotes registered at runtime</span>
+<span class="k">import</span> { init, loadRemote } <span class="k">from</span> <span class="s">'@module-federation/enhanced/runtime'</span>;
+
+<span class="k">const</span> manifest = <span class="k">await</span> <span class="f">fetch</span>(<span class="s">'/mfe-manifest.json'</span>).then(r =&gt; r.<span class="f">json</span>());
+<span class="c">// { "checkout": "https://cdn.acme.com/checkout/4.12.0/mf-manifest.json", ... }</span>
+
+<span class="f">init</span>({
+  name: <span class="s">'shell'</span>,
+  remotes: Object.<span class="f">entries</span>(manifest).<span class="f">map</span>(([name, entry]) =&gt; ({ name, entry })),
+});
+
+<span class="k">const</span> CheckoutPage = React.<span class="f">lazy</span>(() =&gt; <span class="f">loadRemote</span>(<span class="s">'checkout/CheckoutPage'</span>));</code></pre>
+            <h4>Runtime option 2: import maps and native ESM</h4>
+            <p>The browser itself resolves bare specifiers to URLs, with no bundler runtime. Shared dependencies are deduplicated simply by pointing every app at the same URL.</p>
+            <pre class="code" data-lang="html"><code>&lt;script type=<span class="s">"importmap"</span>&gt;
+{
+  <span class="s">"imports"</span>: {
+    <span class="s">"react"</span>: <span class="s">"https://cdn.acme.com/vendor/react@19.1.0/index.js"</span>,
+    <span class="s">"@acme/checkout"</span>: <span class="s">"https://cdn.acme.com/checkout/4.12.0/index.js"</span>
+  }
+}
+&lt;/script&gt;
+&lt;script type=<span class="s">"module"</span>&gt;
+  <span class="k">import</span> { mount } <span class="k">from</span> <span class="s">'@acme/checkout'</span>;
+  <span class="f">mount</span>(document.<span class="f">getElementById</span>(<span class="s">'checkout'</span>));
+&lt;/script&gt;</code></pre>
+            <div class="callout tip"><div class="callout-title">Pragmatic hybrid most large orgs end up with</div><p>The <strong>design system, React and core utilities</strong> are integrated at <em>build time</em> (or shared as federated singletons with a pinned major version). <strong>Product areas</strong> such as checkout, account and search are integrated at <em>runtime</em>. Foundations stay consistent and optimised, and product teams still ship independently.</p></div>
+          </div>
+
+          <div class="subsection">
             <h3>Module Federation in depth</h3>
             <p>Each app is built independently. A <strong>remote</strong> exposes modules via a <code>remoteEntry.js</code> manifest. The <strong>host</strong> loads that manifest at runtime and negotiates <strong>shared</strong> dependencies, so React is loaded once rather than once per micro-frontend.</p>
             <pre class="code" data-lang="js"><code><span class="c">// checkout (remote): webpack / rspack config</span>
@@ -2441,6 +2491,1178 @@ ids.<span class="f">next</span>(<span class="k">true</span>); <span class="c">//
             <details class="qa">
               <summary>How would you choose a framework for a new product at a large company?</summary>
               <div class="qa-a"><p>Weigh the existing team skills and hiring pool, the ecosystem (design system, auth, observability, testing), rendering needs (SEO, SSR, RSC), long-term maintenance and governance, performance constraints (bundle budgets, low-end devices), and interoperability with existing apps (micro-frontends, shared components). Write an ADR with a small spike prototype that measures the criteria that matter. Benchmarks rarely decide it; organisational fit usually does.</p></div>
+            </details>
+          </div>
+        </section>
+
+        <!-- ================= Q12 ================= -->
+        <section class="page" id="q12" hidden
+          data-short="Browser Observer APIs"
+          data-title="Browser Observer APIs: Mutation, Intersection, Resize, Performance &amp; more"
+          data-summary="What each observer watches, when its callback runs, real use cases, and the pitfalls that cause loops and leaks.">
+          <div class="q-header">
+            <div class="q-number">12</div>
+            <h2>Browser Observer APIs<span class="q-sub">MutationObserver, IntersectionObserver, ResizeObserver, PerformanceObserver, ReportingObserver</span></h2>
+          </div>
+          <div class="q-meta"><span class="tag">Observer pattern</span><span class="tag">Lazy loading</span><span class="tag">Impression tracking</span><span class="tag">Container sizing</span><span class="tag">RUM</span></div>
+
+          <div class="callout script">
+            <div class="callout-title">60-second answer</div>
+            <p>Observer APIs let the browser <strong>push</strong> changes to you, batched and off the hot path, instead of you <strong>polling</strong> with scroll listeners, timers or <code>getBoundingClientRect</code>. There are five main ones. <strong>MutationObserver</strong> reports DOM changes. <strong>IntersectionObserver</strong> reports when an element enters or leaves a viewport or container (lazy loading, infinite scroll, ad impressions). <strong>ResizeObserver</strong> reports element size changes (responsive components, charts). <strong>PerformanceObserver</strong> streams performance entries such as LCP, layout shifts, long animation frames and resource timing; it's the foundation of RUM. <strong>ReportingObserver</strong> surfaces deprecations, browser interventions and CSP violations. They all share one API shape: <code>new XObserver(callback)</code>, <code>.observe(target, options)</code>, <code>.disconnect()</code>.</p>
+          </div>
+
+          <div class="subsection">
+            <h3>The observer family at a glance</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Observer</th><th>Watches</th><th>Callback timing</th><th>Typical uses</th></tr></thead>
+                <tbody>
+                  <tr><td>MutationObserver</td><td>DOM tree: children, attributes, text</td><td><strong>Microtask</strong>, after the mutating script finishes; batched</td><td>Reacting to third-party DOM injection, auto-linking, a11y audits, editors</td></tr>
+                  <tr><td>IntersectionObserver</td><td>Overlap of a target with the viewport or an ancestor</td><td>Computed during the rendering steps, delivered asynchronously as a task</td><td>Lazy images and modules, infinite scroll, impressions, pausing offscreen video</td></tr>
+                  <tr><td>ResizeObserver</td><td>Element content or border box size</td><td>In the rendering steps, <strong>after layout, before paint</strong></td><td>Container-responsive components, charts, virtualised lists, textarea autosize</td></tr>
+                  <tr><td>PerformanceObserver</td><td>Performance timeline entries</td><td>Asynchronous, low-priority task</td><td>Core Web Vitals, long animation frames, resource timing, custom marks</td></tr>
+                  <tr><td>ReportingObserver</td><td>Browser reports</td><td>Asynchronous</td><td>Deprecation and intervention monitoring, CSP violations in JS</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Mutation Events (<code>DOMNodeInserted</code> and friends) fired synchronously on every change and were very slow. They're removed from modern browsers, and MutationObserver replaced them.</p>
+          </div>
+
+          <div class="subsection">
+            <h3>MutationObserver</h3>
+            <p>Records are <strong>batched</strong>: 1,000 appended nodes in one script produce one callback with all the records, delivered as a microtask once the current script finishes.</p>
+            <pre class="code" data-lang="js"><code><span class="k">const</span> observer = <span class="k">new</span> <span class="f">MutationObserver</span>((records) =&gt; {
+  <span class="k">for</span> (<span class="k">const</span> r <span class="k">of</span> records) {
+    <span class="k">if</span> (r.type === <span class="s">'childList'</span>) {
+      r.addedNodes.<span class="f">forEach</span>((node) =&gt; {
+        <span class="k">if</span> (node.nodeType === Node.ELEMENT_NODE &amp;&amp; node.matches(<span class="s">'iframe:not([title])'</span>)) {
+          <span class="f">reportA11yIssue</span>(<span class="s">'Untitled iframe injected'</span>, node.src);
+        }
+      });
+    }
+    <span class="k">if</span> (r.type === <span class="s">'attributes'</span>) console.<span class="f">log</span>(r.attributeName, r.oldValue, <span class="s">'→'</span>, r.target.<span class="f">getAttribute</span>(r.attributeName));
+  }
+});
+
+observer.<span class="f">observe</span>(document.<span class="f">getElementById</span>(<span class="s">'widget-root'</span>), {
+  childList: <span class="k">true</span>,          <span class="c">// added / removed children</span>
+  subtree: <span class="k">true</span>,            <span class="c">// the whole descendant tree</span>
+  attributes: <span class="k">true</span>,
+  attributeFilter: [<span class="s">'class'</span>, <span class="s">'aria-expanded'</span>], <span class="c">// narrow it down</span>
+  attributeOldValue: <span class="k">true</span>,
+  characterData: <span class="k">false</span>,
+});
+
+<span class="c">// Later: stop observing and get any undelivered records</span>
+<span class="k">const</span> pending = observer.<span class="f">takeRecords</span>();
+observer.<span class="f">disconnect</span>();</code></pre>
+            <div class="callout warn"><div class="callout-title">Pitfalls</div>
+              <ul>
+                <li><strong>Infinite loops:</strong> mutating the observed subtree inside the callback triggers another callback. Guard with a flag, compare against the previous value, or disconnect, mutate, then re-observe.</li>
+                <li><strong>Cost:</strong> <code>subtree: true</code> on <code>document.body</code> in a React app sees every render. Observe the narrowest root and filter attributes.</li>
+                <li>In React, prefer state and refs. Use MutationObserver only for DOM you don't own (third-party widgets, CMS HTML, extensions).</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="subsection">
+            <h3>IntersectionObserver</h3>
+            <p>The browser calculates intersections efficiently during rendering, which replaces scroll listeners that call <code>getBoundingClientRect()</code> and force layout on every scroll event.</p>
+            <ul>
+              <li><code>root</code>: the scrolling ancestor (<code>null</code> means the viewport).</li>
+              <li><code>rootMargin</code>: grow or shrink the root box, e.g. <code>'200px 0px'</code> to start loading 200 px <em>before</em> an element is visible.</li>
+              <li><code>threshold</code>: the visible ratio(s) that fire the callback, e.g. <code>[0, 0.5, 1]</code>.</li>
+            </ul>
+            <pre class="code" data-lang="tsx"><code><span class="c">// Reusable hook: infinite scroll sentinel or lazy section</span>
+<span class="k">export function</span> <span class="f">useInView</span>&lt;T <span class="k">extends</span> Element&gt;(options?: IntersectionObserverInit) {
+  <span class="k">const</span> ref = <span class="f">useRef</span>&lt;T&gt;(<span class="k">null</span>);
+  <span class="k">const</span> [inView, setInView] = <span class="f">useState</span>(<span class="k">false</span>);
+  <span class="f">useEffect</span>(() =&gt; {
+    <span class="k">const</span> el = ref.current;
+    <span class="k">if</span> (!el) <span class="k">return</span>;
+    <span class="k">const</span> io = <span class="k">new</span> <span class="f">IntersectionObserver</span>(([entry]) =&gt; <span class="f">setInView</span>(entry.isIntersecting), options);
+    io.<span class="f">observe</span>(el);
+    <span class="k">return</span> () =&gt; io.<span class="f">disconnect</span>();        <span class="c">// avoid leaks on unmount</span>
+  }, [options?.root, options?.rootMargin, String(options?.threshold)]);
+  <span class="k">return</span> [ref, inView] <span class="k">as const</span>;
+}
+
+<span class="c">// Usage</span>
+<span class="k">const</span> [sentinelRef, atBottom] = <span class="f">useInView</span>&lt;HTMLDivElement&gt;({ rootMargin: <span class="s">'400px'</span> });
+<span class="f">useEffect</span>(() =&gt; { <span class="k">if</span> (atBottom &amp;&amp; hasNextPage) <span class="f">fetchNextPage</span>(); }, [atBottom]);
+<span class="k">return</span> &lt;&gt;{items}&lt;div ref={sentinelRef} /&gt;&lt;/&gt;;</code></pre>
+            <h4>Ad and impression tracking</h4>
+            <p>The industry viewability standard (IAB/MRC) for display ads is <strong>at least 50% of pixels visible for at least 1 continuous second</strong>. Implement it with <code>threshold: 0.5</code> plus a timer that starts on intersect and is cancelled on exit. Also pause the timer when <code>document.visibilityState === 'hidden'</code>. IntersectionObserver v2 (<code>trackVisibility</code>) can additionally detect elements covered by overlays or opacity tricks.</p>
+            <p><strong>Native alternatives:</strong> for simple image lazy-loading, use <code>&lt;img loading="lazy"&gt;</code>. For skipping offscreen rendering work, use CSS <code>content-visibility: auto</code>.</p>
+          </div>
+
+          <div class="subsection">
+            <h3>ResizeObserver</h3>
+            <p>Window <code>resize</code> events tell you nothing about an element whose size changed because of a sidebar toggle, content load or flex reflow. ResizeObserver watches the element itself.</p>
+            <pre class="code" data-lang="js"><code><span class="k">const</span> ro = <span class="k">new</span> <span class="f">ResizeObserver</span>((entries) =&gt; {
+  <span class="k">for</span> (<span class="k">const</span> entry <span class="k">of</span> entries) {
+    <span class="k">const</span> { inlineSize: width, blockSize: height } = entry.contentBoxSize[<span class="n">0</span>];
+    chart.<span class="f">resize</span>(width, height);         <span class="c">// redraw the canvas at the real size</span>
+  }
+});
+ro.<span class="f">observe</span>(chartContainer, { box: <span class="s">'content-box'</span> }); <span class="c">// or 'border-box', 'device-pixel-content-box'</span></code></pre>
+            <div class="callout warn"><div class="callout-title">"ResizeObserver loop completed with undelivered notifications"</div><p>If the callback changes the size of an observed element, the browser re-runs observations in the same frame, but only for deeper elements, to avoid an infinite loop. Anything left over produces this error, usually harmless but noisy in error trackers. Fix it by not resizing the observed element in its own callback, or defer the write with <code>requestAnimationFrame</code>. For purely visual responsiveness, prefer <strong>CSS container queries</strong>, which need no JavaScript at all.</p></div>
+          </div>
+
+          <div class="subsection">
+            <h3>PerformanceObserver</h3>
+            <p>This is how RUM libraries such as <code>web-vitals</code> work under the hood. Use <code>buffered: true</code> to receive entries that occurred <em>before</em> your script loaded.</p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Entry type</th><th>Gives you</th></tr></thead>
+                <tbody>
+                  <tr><td><code>navigation</code></td><td>DNS, TCP, TLS, TTFB, DOMContentLoaded, load timings</td></tr>
+                  <tr><td><code>resource</code></td><td>Timing and size for every fetched asset or API call</td></tr>
+                  <tr><td><code>paint</code></td><td>first-paint, first-contentful-paint</td></tr>
+                  <tr><td><code>largest-contentful-paint</code></td><td>LCP candidates and their element</td></tr>
+                  <tr><td><code>layout-shift</code></td><td>Each shift with its value and sources (for CLS)</td></tr>
+                  <tr><td><code>event</code></td><td>Interaction latency (for INP)</td></tr>
+                  <tr><td><code>long-animation-frame</code></td><td>Frames over 50 ms with script attribution (supersedes <code>longtask</code>)</td></tr>
+                  <tr><td><code>mark</code> / <code>measure</code></td><td>Your own user timings</td></tr>
+                  <tr><td><code>element</code></td><td>Render time of elements marked with <code>elementtiming</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <pre class="code" data-lang="js"><code><span class="c">// Find which scripts cause slow frames (helps debug INP)</span>
+<span class="k">new</span> <span class="f">PerformanceObserver</span>((list) =&gt; {
+  <span class="k">for</span> (<span class="k">const</span> frame <span class="k">of</span> list.<span class="f">getEntries</span>()) {
+    <span class="k">const</span> worst = [...frame.scripts].<span class="f">sort</span>((a, b) =&gt; b.duration - a.duration)[<span class="n">0</span>];
+    <span class="f">report</span>(<span class="s">'loaf'</span>, {
+      duration: frame.duration,
+      blockingDuration: frame.blockingDuration,
+      script: worst?.sourceURL, fn: worst?.sourceFunctionName, invoker: worst?.invoker,
+    });
+  }
+}).<span class="f">observe</span>({ type: <span class="s">'long-animation-frame'</span>, buffered: <span class="k">true</span> });
+
+<span class="c">// Measure API calls slower than 1 s</span>
+<span class="k">new</span> <span class="f">PerformanceObserver</span>((list) =&gt; {
+  list.<span class="f">getEntries</span>()
+    .<span class="f">filter</span>((e) =&gt; e.initiatorType === <span class="s">'fetch'</span> &amp;&amp; e.duration &gt; <span class="n">1000</span>)
+    .<span class="f">forEach</span>((e) =&gt; <span class="f">report</span>(<span class="s">'slow-api'</span>, { url: e.name, ms: e.duration, ttfb: e.responseStart - e.requestStart }));
+}).<span class="f">observe</span>({ type: <span class="s">'resource'</span>, buffered: <span class="k">true</span> });</code></pre>
+            <p>Cross-origin resources report zero for detailed timings unless the server sends <code>Timing-Allow-Origin</code>.</p>
+          </div>
+
+          <div class="subsection">
+            <h3>ReportingObserver and related APIs</h3>
+            <pre class="code" data-lang="js"><code><span class="k">new</span> <span class="f">ReportingObserver</span>((reports) =&gt; {
+  reports.<span class="f">forEach</span>((r) =&gt; <span class="f">report</span>(<span class="s">'browser-report'</span>, { type: r.type, url: r.url, body: r.body?.toJSON?.() }));
+}, { types: [<span class="s">'deprecation'</span>, <span class="s">'intervention'</span>, <span class="s">'csp-violation'</span>], buffered: <span class="k">true</span> }).<span class="f">observe</span>();</code></pre>
+            <p>Deprecation reports warn you <em>before</em> a browser removes an API your code (or a vendor's) uses. Intervention reports tell you when the browser blocked something, such as a heavy ad or a <code>document.write</code> script on slow networks. Servers can receive the same reports through the <code>Reporting-Endpoints</code> header.</p>
+            <p><strong>Observer-like APIs worth naming:</strong> <code>matchMedia(query).addEventListener('change')</code> for media queries, <code>PressureObserver</code> (Compute Pressure, for CPU load), <code>BroadcastChannel</code> for cross-tab messages, and <code>document.visibilitychange</code>. Libraries such as RxJS generalise the same observer pattern to streams.</p>
+          </div>
+
+          <div class="subsection">
+            <h3>Interviewer follow-ups</h3>
+            <div class="qa-toolbar"><button class="text-btn" data-expand>Expand all</button></div>
+            <details class="qa">
+              <summary>Why is IntersectionObserver better than a scroll listener for lazy loading?</summary>
+              <div class="qa-a"><p>Scroll events fire many times per frame on some devices. Calling <code>getBoundingClientRect()</code> in them forces synchronous layout on the main thread and causes jank, even with throttling. IntersectionObserver lets the browser compute intersections once per frame as part of rendering, without forced layout, and batches the results. It also works for any scroll container and keeps working when layout changes without a scroll.</p></div>
+            </details>
+            <details class="qa">
+              <summary>How do observers cause memory leaks, and how do you prevent them?</summary>
+              <div class="qa-a"><p>An observer holds references to its callback (and whatever the closure captures) and to observed targets until <code>unobserve</code> or <code>disconnect</code>. In SPAs, components that create observers without disconnecting in cleanup keep detached DOM trees and component state alive. Always <code>disconnect()</code> in the effect cleanup, and share a single observer for many targets (one IntersectionObserver for a list of 500 cards) rather than creating one per element.</p></div>
+            </details>
+            <details class="qa">
+              <summary>A third-party script keeps adding a banner that shifts your layout. What would you do?</summary>
+              <div class="qa-a"><p>Confirm it with a PerformanceObserver on <code>layout-shift</code> (check <code>sources</code>) and a MutationObserver on the injection point to see when and where the node appears. Then fix it structurally: reserve space with a fixed-height slot, load the script after the main content, or render the banner in an overlay that doesn't affect layout. Raise it with the vendor, and gate the script behind a feature flag so it can be turned off if it degrades CLS.</p></div>
+            </details>
+          </div>
+        </section>
+
+        <!-- ================= Q13 ================= -->
+        <section class="page" id="q13" hidden
+          data-short="Resilience &amp; Degradation"
+          data-title="Resilience &amp; Graceful Degradation in the Frontend"
+          data-summary="Error boundaries, retries with backoff, circuit breakers, skeletons, stale-while-revalidate, kill switches and failure-mode design.">
+          <div class="q-header">
+            <div class="q-number">13</div>
+            <h2>Resilience &amp; Graceful Degradation<span class="q-sub">Designing UIs that bend instead of break: error boundaries, circuit breakers, skeletons, stale-while-revalidate</span></h2>
+          </div>
+          <div class="q-meta"><span class="tag">Error boundaries</span><span class="tag">Retries + jitter</span><span class="tag">Circuit breaker</span><span class="tag">Suspense / skeletons</span><span class="tag">SWR</span><span class="tag">Kill switches</span></div>
+
+          <div class="callout script">
+            <div class="callout-title">60-second answer</div>
+            <p>I assume every dependency will fail: APIs, CDNs, third-party scripts, even our own JS chunks after a deploy. Resilience is about <strong>containing the blast radius</strong> and <strong>degrading to something useful</strong>. Error boundaries scope crashes to a widget instead of a white screen. Data calls get timeouts, retries with exponential backoff and jitter, and a <strong>circuit breaker</strong> so a failing service isn't hammered. Skeletons and Suspense keep the layout stable while loading. <strong>Stale-while-revalidate</strong> serves cached data instantly and refreshes in the background, which also covers outages. Feature-flag kill switches let us turn off a broken feature without a deploy, and all of it is monitored so failures are visible.</p>
+          </div>
+
+          <div class="subsection">
+            <h3>What can fail, and what "graceful" looks like</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Failure</th><th>Bad experience</th><th>Graceful degradation</th></tr></thead>
+                <tbody>
+                  <tr><td>Recommendations API down</td><td>Whole product page crashes</td><td>Hide the carousel; the page works without it</td></tr>
+                  <tr><td>Search API slow (p99 8 s)</td><td>Infinite spinner</td><td>Timeout at 3 s, show cached or popular results, offer retry</td></tr>
+                  <tr><td>Render error in one widget</td><td>White screen</td><td>Error boundary renders a compact fallback</td></tr>
+                  <tr><td>Chunk 404 after a deploy</td><td>"Loading chunk 42 failed" and a dead route</td><td>Retry the import, then reload once to get the new version</td></tr>
+                  <tr><td>Third-party script hangs</td><td>Blocks render or main thread</td><td>Load async with a timeout; isolate in a worker or iframe; feature-flag it off</td></tr>
+                  <tr><td>Offline or flaky network</td><td>Errors everywhere, lost input</td><td>Cached shell and data, queued writes, clear offline banner, form state preserved</td></tr>
+                  <tr><td>Payments provider degraded</td><td>Checkout errors</td><td>Circuit breaker opens; offer an alternative method or "save cart, notify me"</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Classify features as <strong>critical</strong> (must work: login, checkout) or <strong>enhancements</strong> (can disappear: recommendations, reviews, chat). Critical paths get the most redundancy; enhancements fail closed and silent.</p>
+          </div>
+
+          <div class="subsection">
+            <h3>Client-side error boundaries</h3>
+            <p>An error boundary is a class component that catches errors thrown <strong>during rendering, in lifecycle methods, and in constructors</strong> of its descendants, and renders a fallback instead of unmounting the whole tree. Without one, since React 16 an uncaught render error unmounts the entire root.</p>
+            <pre class="code" data-lang="tsx"><code><span class="k">type</span> Props = {
+  fallback: (args: { error: Error; reset: () =&gt; <span class="k">void</span> }) =&gt; React.ReactNode;
+  resetKeys?: unknown[];
+  name: <span class="k">string</span>;                           <span class="c">// for telemetry grouping</span>
+  children: React.ReactNode;
+};
+
+<span class="k">export class</span> <span class="f">ErrorBoundary</span> <span class="k">extends</span> React.Component&lt;Props, { error: Error | <span class="k">null</span> }&gt; {
+  state = { error: <span class="k">null</span> };
+
+  <span class="k">static</span> <span class="f">getDerivedStateFromError</span>(error: Error) {
+    <span class="k">return</span> { error };                     <span class="c">// render phase: switch to the fallback</span>
+  }
+
+  <span class="f">componentDidCatch</span>(error: Error, info: React.ErrorInfo) {
+    <span class="f">reportError</span>(error, {                  <span class="c">// commit phase: side effects allowed</span>
+      boundary: <span class="k">this</span>.props.name,
+      componentStack: info.componentStack,
+      route: location.pathname,
+    });
+  }
+
+  <span class="f">componentDidUpdate</span>(prev: Props) {
+    <span class="c">// Auto-reset when inputs change (e.g. the user navigates to a different product)</span>
+    <span class="k">if</span> (<span class="k">this</span>.state.error &amp;&amp; <span class="f">changed</span>(prev.resetKeys, <span class="k">this</span>.props.resetKeys)) <span class="k">this</span>.<span class="f">reset</span>();
+  }
+
+  reset = () =&gt; <span class="k">this</span>.<span class="f">setState</span>({ error: <span class="k">null</span> });
+
+  <span class="f">render</span>() {
+    <span class="k">return this</span>.state.error
+      ? <span class="k">this</span>.props.<span class="f">fallback</span>({ error: <span class="k">this</span>.state.error, reset: <span class="k">this</span>.reset })
+      : <span class="k">this</span>.props.children;
+  }
+}
+
+<span class="k">const</span> <span class="f">changed</span> = (a: unknown[] = [], b: unknown[] = []) =&gt;
+  a.length !== b.length || a.<span class="f">some</span>((v, i) =&gt; !Object.<span class="f">is</span>(v, b[i]));</code></pre>
+            <h4>Layered placement</h4>
+            <pre class="code" data-lang="tsx"><code>&lt;<span class="f">ErrorBoundary</span> name=<span class="s">"app"</span> fallback={() =&gt; &lt;<span class="f">FullPageError</span> /&gt;}&gt;          <span class="c">{/* last resort */}</span>
+  &lt;<span class="f">Header</span> /&gt;
+  &lt;<span class="f">ErrorBoundary</span> name=<span class="s">"route"</span> resetKeys={[pathname]}
+    fallback={({ reset }) =&gt; &lt;<span class="f">RouteError</span> onRetry={reset} /&gt;}&gt;               <span class="c">{/* nav still works */}</span>
+    &lt;<span class="f">ProductDetails</span> id={id} /&gt;
+    &lt;<span class="f">ErrorBoundary</span> name=<span class="s">"recommendations"</span> fallback={() =&gt; <span class="k">null</span>}&gt;          <span class="c">{/* enhancement: vanish */}</span>
+      &lt;<span class="f">Recommendations</span> productId={id} /&gt;
+    &lt;/<span class="f">ErrorBoundary</span>&gt;
+    &lt;<span class="f">ErrorBoundary</span> name=<span class="s">"reviews"</span> resetKeys={[id]}
+      fallback={({ reset }) =&gt; &lt;<span class="f">InlineError</span> msg=<span class="s">"Reviews unavailable"</span> onRetry={reset} /&gt;}&gt;
+      &lt;<span class="f">Reviews</span> productId={id} /&gt;
+    &lt;/<span class="f">ErrorBoundary</span>&gt;
+  &lt;/<span class="f">ErrorBoundary</span>&gt;
+&lt;/<span class="f">ErrorBoundary</span>&gt;</code></pre>
+            <h4>What error boundaries do <em>not</em> catch, and how to cover it</h4>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Not caught</th><th>How to handle it</th></tr></thead>
+                <tbody>
+                  <tr><td>Event handlers (<code>onClick</code>)</td><td><code>try/catch</code> in the handler; to show the boundary's fallback, use <code>showBoundary(error)</code> from <code>react-error-boundary</code> or set state and rethrow during render</td></tr>
+                  <tr><td>Async code (<code>setTimeout</code>, promises)</td><td>Handle the promise; React Query exposes <code>error</code> state, or <code>throwOnError</code> rethrows into the nearest boundary</td></tr>
+                  <tr><td>Server-side rendering</td><td>Framework error handling (Next.js <code>error.tsx</code>, <code>global-error.tsx</code>); stream errors per Suspense boundary</td></tr>
+                  <tr><td>Errors in the boundary itself</td><td>A parent boundary catches them</td></tr>
+                  <tr><td>Anything outside React</td><td><code>window.addEventListener('error')</code> and <code>'unhandledrejection'</code> for reporting</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>React 19 adds root-level hooks for reporting: <code>createRoot(el, { onCaughtError, onUncaughtError, onRecoverableError })</code>.</p>
+          </div>
+
+          <div class="subsection">
+            <h3>Loading states: skeletons, Suspense, and avoiding flicker</h3>
+            <div class="card-grid">
+              <div class="card c-teal"><div class="card-label">Skeleton screens</div><p>Grey placeholders with the <em>same dimensions</em> as the final content. They feel faster than spinners and prevent CLS.</p></div>
+              <div class="card"><div class="card-label">Suspense boundaries</div><p>Declare loading UI per region. Nested boundaries reveal content progressively (shell → main → secondary).</p></div>
+              <div class="card c-amber"><div class="card-label">Delay the spinner</div><p>Don't show loading UI for fast responses (under ~200–300 ms); a flash of spinner feels slower than a short wait.</p></div>
+              <div class="card c-violet"><div class="card-label">Keep previous data</div><p>When filters change, keep showing old results dimmed (<code>useTransition</code> / <code>keepPreviousData</code>) instead of blanking the page.</p></div>
+            </div>
+            <pre class="code" data-lang="tsx"><code>&lt;<span class="f">Suspense</span> fallback={&lt;<span class="f">ProductSkeleton</span> /&gt;}&gt;            <span class="c">{/* critical content first */}</span>
+  &lt;<span class="f">ProductDetails</span> id={id} /&gt;
+  &lt;<span class="f">ErrorBoundary</span> name=<span class="s">"reviews"</span> fallback={() =&gt; &lt;<span class="f">ReviewsUnavailable</span> /&gt;}&gt;
+    &lt;<span class="f">Suspense</span> fallback={&lt;<span class="f">ReviewsSkeleton</span> rows={<span class="n">3</span>} /&gt;}&gt;  <span class="c">{/* streams in later */}</span>
+      &lt;<span class="f">Reviews</span> id={id} /&gt;
+    &lt;/<span class="f">Suspense</span>&gt;
+  &lt;/<span class="f">ErrorBoundary</span>&gt;
+&lt;/<span class="f">Suspense</span>&gt;</code></pre>
+            <p>Pair every <code>Suspense</code> (loading) with an <code>ErrorBoundary</code> (failure), so each region has all three states: loading, error and success.</p>
+          </div>
+
+          <div class="subsection">
+            <h3>Stale-while-revalidate patterns</h3>
+            <p>SWR means: <strong>respond immediately from cache (even if stale), then refresh in the background</strong> and update when fresh data arrives. Users get instant UI, and if the refresh fails they still have the last good data. The same idea appears at three layers:</p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Layer</th><th>Mechanism</th><th>Example</th></tr></thead>
+                <tbody>
+                  <tr><td>HTTP / CDN</td><td><code>Cache-Control</code> directives</td><td><code>max-age=60, stale-while-revalidate=600, stale-if-error=86400</code></td></tr>
+                  <tr><td>Data layer</td><td>SWR, TanStack Query</td><td><code>staleTime</code>, refetch on focus or reconnect, cached data while refetching</td></tr>
+                  <tr><td>Service Worker</td><td>Cache API strategy</td><td>Workbox <code>StaleWhileRevalidate</code> for catalog or config endpoints</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <pre class="code" data-lang="js"><code><span class="c">// Service Worker: stale-while-revalidate for read-only catalog data</span>
+self.<span class="f">addEventListener</span>(<span class="s">'fetch'</span>, (event) =&gt; {
+  <span class="k">const</span> url = <span class="k">new</span> <span class="f">URL</span>(event.request.url);
+  <span class="k">if</span> (event.request.method !== <span class="s">'GET'</span> || !url.pathname.<span class="f">startsWith</span>(<span class="s">'/api/catalog'</span>)) <span class="k">return</span>;
+
+  event.<span class="f">respondWith</span>((<span class="k">async</span> () =&gt; {
+    <span class="k">const</span> cache = <span class="k">await</span> caches.<span class="f">open</span>(<span class="s">'catalog-v1'</span>);
+    <span class="k">const</span> cached = <span class="k">await</span> cache.<span class="f">match</span>(event.request);
+    <span class="k">const</span> network = <span class="f">fetch</span>(event.request).<span class="f">then</span>((res) =&gt; {
+      <span class="k">if</span> (res.ok) cache.<span class="f">put</span>(event.request, res.<span class="f">clone</span>());
+      <span class="k">return</span> res;
+    });
+    <span class="k">if</span> (cached) {
+      event.<span class="f">waitUntil</span>(network.<span class="f">catch</span>(() =&gt; {})); <span class="c">// refresh in the background</span>
+      <span class="k">return</span> cached;                            <span class="c">// instant, even offline</span>
+    }
+    <span class="k">return</span> network;
+  })());
+});</code></pre>
+            <div class="callout warn"><div class="callout-title">Where SWR is wrong</div><p>Don't serve stale data where staleness is harmful: account balances, stock at checkout, prices at payment, permissions. There, show fresh data or a clear "couldn't refresh" state with a timestamp.</p></div>
+          </div>
+
+          <div class="subsection">
+            <h3>Timeouts, retries with backoff, and jitter</h3>
+            <pre class="code" data-lang="ts"><code><span class="k">export async function</span> <span class="f">fetchWithRetry</span>(url: <span class="k">string</span>, init: RequestInit = {}, { retries = <span class="n">3</span>, baseMs = <span class="n">300</span>, timeoutMs = <span class="n">5000</span> } = {}) {
+  <span class="k">for</span> (<span class="k">let</span> attempt = <span class="n">0</span>; ; attempt++) {
+    <span class="k">try</span> {
+      <span class="k">const</span> res = <span class="k">await</span> <span class="f">fetch</span>(url, { ...init, signal: AbortSignal.<span class="f">timeout</span>(timeoutMs) });
+      <span class="k">if</span> (res.status === <span class="n">429</span> || res.status &gt;= <span class="n">500</span>) {
+        <span class="k">throw</span> Object.<span class="f">assign</span>(<span class="k">new</span> <span class="f">Error</span>(<span class="s">`HTTP ${res.status}`</span>), { retryable: <span class="k">true</span>, res });
+      }
+      <span class="k">return</span> res;                                     <span class="c">// 4xx (except 429) is not retried</span>
+    } <span class="k">catch</span> (err: <span class="k">any</span>) {
+      <span class="k">const</span> retryable = err.retryable || err.name === <span class="s">'TimeoutError'</span> || err.name === <span class="s">'TypeError'</span>; <span class="c">// TypeError = network failure</span>
+      <span class="k">if</span> (!retryable || attempt &gt;= retries) <span class="k">throw</span> err;
+      <span class="k">const</span> retryAfter = Number(err.res?.headers.<span class="f">get</span>(<span class="s">'Retry-After'</span>)) * <span class="n">1000</span>;
+      <span class="k">const</span> backoff = Math.<span class="f">random</span>() * baseMs * <span class="n">2</span> ** attempt; <span class="c">// exponential + full jitter</span>
+      <span class="k">await new</span> <span class="f">Promise</span>((r) =&gt; <span class="f">setTimeout</span>(r, retryAfter || backoff));
+    }
+  }
+}</code></pre>
+            <ul>
+              <li><strong>Jitter</strong> spreads retries out. Without it, thousands of clients retry in lockstep and create a "thundering herd" that keeps a recovering service down.</li>
+              <li><strong>Only retry idempotent requests</strong> (GET, PUT, DELETE). For POSTs such as payments, send an <code>Idempotency-Key</code> header so the server can deduplicate.</li>
+              <li><strong>Retry budgets:</strong> cap total retries (for example, at most 10% extra load), and never retry at several layers at once, or the multiplication amplifies load.</li>
+            </ul>
+          </div>
+
+          <div class="subsection">
+            <h3>Circuit breakers</h3>
+            <p>Retries help with brief blips. When a dependency is really down, retrying just adds load and makes users wait for timeouts. A circuit breaker <strong>fails fast</strong> after repeated failures, gives the dependency time to recover, then probes carefully.</p>
+            <div class="diagram"><pre>        failures ≥ threshold
+  ┌─────────┐ ───────────────────▶ ┌─────────┐
+  │ <span class="yes">CLOSED</span>  │                      │  <span class="no">OPEN</span>   │  calls fail immediately
+  │ normal  │ ◀──────┐             │ (fast   │  → show fallback
+  └─────────┘        │             │  fail)  │
+       ▲             │             └────┬────┘
+       │ probe ok    │ probe fails      │ cooldown elapsed
+       │             │                  ▼
+       │        ┌────┴──────┐
+       └────────│ <span class="hl">HALF-OPEN</span> │  allow one trial request
+                └───────────┘</pre></div>
+            <pre class="code" data-lang="ts"><code><span class="k">type</span> State = <span class="s">'CLOSED'</span> | <span class="s">'OPEN'</span> | <span class="s">'HALF_OPEN'</span>;
+
+<span class="k">export class</span> <span class="f">CircuitBreaker</span>&lt;A <span class="k">extends</span> <span class="k">unknown</span>[], R&gt; {
+  <span class="k">private</span> state: State = <span class="s">'CLOSED'</span>;
+  <span class="k">private</span> failures = <span class="n">0</span>;
+  <span class="k">private</span> openedAt = <span class="n">0</span>;
+  <span class="k">private</span> probing = <span class="k">false</span>;
+
+  <span class="f">constructor</span>(
+    <span class="k">private</span> fn: (...args: A) =&gt; Promise&lt;R&gt;,
+    <span class="k">private</span> opts = { failureThreshold: <span class="n">5</span>, cooldownMs: <span class="n">30_000</span> },
+  ) {}
+
+  <span class="k">async</span> <span class="f">call</span>(...args: A): Promise&lt;R&gt; {
+    <span class="k">if</span> (<span class="k">this</span>.state === <span class="s">'OPEN'</span>) {
+      <span class="k">if</span> (Date.<span class="f">now</span>() - <span class="k">this</span>.openedAt &lt; <span class="k">this</span>.opts.cooldownMs) <span class="k">throw new</span> <span class="f">CircuitOpenError</span>();
+      <span class="k">this</span>.state = <span class="s">'HALF_OPEN'</span>;
+    }
+    <span class="k">if</span> (<span class="k">this</span>.state === <span class="s">'HALF_OPEN'</span>) {
+      <span class="k">if</span> (<span class="k">this</span>.probing) <span class="k">throw new</span> <span class="f">CircuitOpenError</span>();  <span class="c">// only one trial at a time</span>
+      <span class="k">this</span>.probing = <span class="k">true</span>;
+    }
+    <span class="k">try</span> {
+      <span class="k">const</span> result = <span class="k">await this</span>.<span class="f">fn</span>(...args);
+      <span class="k">this</span>.state = <span class="s">'CLOSED'</span>;
+      <span class="k">this</span>.failures = <span class="n">0</span>;
+      <span class="k">return</span> result;
+    } <span class="k">catch</span> (err) {
+      <span class="k">this</span>.failures++;
+      <span class="k">if</span> (<span class="k">this</span>.state === <span class="s">'HALF_OPEN'</span> || <span class="k">this</span>.failures &gt;= <span class="k">this</span>.opts.failureThreshold) {
+        <span class="k">this</span>.state = <span class="s">'OPEN'</span>;
+        <span class="k">this</span>.openedAt = Date.<span class="f">now</span>();
+      }
+      <span class="k">throw</span> err;
+    } <span class="k">finally</span> {
+      <span class="k">this</span>.probing = <span class="k">false</span>;
+    }
+  }
+}
+
+<span class="k">class</span> <span class="f">CircuitOpenError</span> <span class="k">extends</span> Error { name = <span class="s">'CircuitOpenError'</span>; }
+
+<span class="c">// Usage: one breaker per dependency, shared across components</span>
+<span class="k">const</span> recsBreaker = <span class="k">new</span> <span class="f">CircuitBreaker</span>((id: <span class="k">string</span>) =&gt; <span class="f">fetchWithRetry</span>(<span class="s">`/api/recs/${id}`</span>).then(r =&gt; r.<span class="f">json</span>()));
+<span class="k">const</span> recs = <span class="k">await</span> recsBreaker.<span class="f">call</span>(productId).<span class="f">catch</span>(() =&gt; []); <span class="c">// degrade to "no recommendations"</span></code></pre>
+            <p>In the browser, a breaker protects the <strong>user experience</strong> (no repeated 5-second timeouts) and reduces load from millions of clients. Server-side breakers (in the BFF or service mesh) protect the backend. Use both for critical dependencies.</p>
+          </div>
+
+          <div class="subsection">
+            <h3>More resilience patterns</h3>
+            <ul>
+              <li><strong>Kill switches and feature flags:</strong> wrap risky or third-party features in flags (LaunchDarkly, Unleash, or config served from the CDN) so they can be turned off in seconds without a deploy.</li>
+              <li><strong>Chunk-load recovery:</strong> after a deploy, old tabs request chunks that no longer exist. Keep old assets for a few days, and retry dynamic imports before reloading once.</li>
+              <li><strong>Bulkheads:</strong> isolate third-party code in iframes or workers so it can't block the main thread or crash the app.</li>
+              <li><strong>Optimistic UI with rollback:</strong> apply changes instantly and roll back on failure (see Question 4).</li>
+              <li><strong>Offline-first writes:</strong> queue mutations in IndexedDB and replay with Background Sync when the connection returns.</li>
+              <li><strong>Progressive enhancement:</strong> core flows such as forms and links still work if JS fails to load. Server Actions and plain <code>&lt;form&gt;</code> make this easier.</li>
+            </ul>
+            <pre class="code" data-lang="ts"><code><span class="c">// React.lazy with chunk-load recovery</span>
+<span class="k">export const</span> <span class="f">lazyWithRetry</span> = &lt;T <span class="k">extends</span> React.ComponentType&lt;<span class="k">any</span>&gt;&gt;(factory: () =&gt; Promise&lt;{ default: T }&gt;) =&gt;
+  React.<span class="f">lazy</span>(<span class="k">async</span> () =&gt; {
+    <span class="k">try</span> {
+      <span class="k">return await</span> <span class="f">factory</span>();
+    } <span class="k">catch</span> (err) {
+      <span class="k">if</span> (!sessionStorage.<span class="f">getItem</span>(<span class="s">'chunk-reload'</span>)) {
+        sessionStorage.<span class="f">setItem</span>(<span class="s">'chunk-reload'</span>, <span class="s">'1'</span>);
+        location.<span class="f">reload</span>();                         <span class="c">// fetch the new HTML + manifest</span>
+        <span class="k">return new</span> <span class="f">Promise</span>&lt;<span class="k">never</span>&gt;(() =&gt; {});       <span class="c">// keep Suspense showing until reload</span>
+      }
+      <span class="k">throw</span> err;                                  <span class="c">// already reloaded: let the error boundary handle it</span>
+    }
+  });</code></pre>
+          </div>
+
+          <div class="subsection">
+            <h3>Interviewer follow-ups</h3>
+            <div class="qa-toolbar"><button class="text-btn" data-expand>Expand all</button></div>
+            <details class="qa">
+              <summary>How granular should error boundaries be?</summary>
+              <div class="qa-a"><p>Put them at <strong>independent units of value</strong>: the app root (last resort), each route (so navigation still works), and each independently useful widget (reviews, recommendations, charts on a dashboard). Not around every component, because too many fallbacks make a fragmented, confusing UI. A good test: "if this region breaks, is the rest of the screen still useful?" If yes, it deserves its own boundary.</p></div>
+            </details>
+            <details class="qa">
+              <summary>How do you test resilience?</summary>
+              <div class="qa-a"><p>Use MSW handlers that return 500s, timeouts and slow responses for each dependency. Use Playwright <code>page.route()</code> to abort third-party scripts and chunk requests, and test offline with <code>context.setOffline(true)</code>. Write component tests that throw inside widgets to assert the fallback renders. In staging, run chaos experiments (inject latency at the gateway). In production, monitor fallback render counts, because a spike means a dependency is degraded even if no one has complained yet.</p></div>
+            </details>
+            <details class="qa">
+              <summary>Graceful degradation vs progressive enhancement: what's the difference?</summary>
+              <div class="qa-a"><p><strong>Graceful degradation</strong> starts from the full experience and defines fallbacks when parts fail. <strong>Progressive enhancement</strong> starts from a baseline that works everywhere (semantic HTML, server-rendered forms) and layers richer behaviour on top when capabilities are available. They're complementary: progressive enhancement makes the baseline robust, and graceful degradation handles runtime failures in the enhanced layers.</p></div>
+            </details>
+          </div>
+        </section>
+
+        <!-- ================= Q14 ================= -->
+        <section class="page" id="q14" hidden
+          data-short="Build Tooling &amp; Monorepos"
+          data-title="Build Tooling at Scale: Monorepos, Nx/Turborepo, Vite/webpack &amp; Caching"
+          data-summary="Monorepo vs polyrepo, task graphs, affected builds, local and remote caching, bundler caches, and module boundaries.">
+          <div class="q-header">
+            <div class="q-number">14</div>
+            <h2>Build Tooling &amp; Monorepos at Scale<span class="q-sub">Nx, Turborepo, pnpm workspaces, Vite/webpack/Rspack, and caching at every layer</span></h2>
+          </div>
+          <div class="q-meta"><span class="tag">Task graph</span><span class="tag">Affected builds</span><span class="tag">Remote cache</span><span class="tag">Module boundaries</span><span class="tag">pnpm</span></div>
+
+          <div class="callout script">
+            <div class="callout-title">60-second answer</div>
+            <p>A monorepo puts many apps and libraries in one repository, which gives atomic cross-project changes, one dependency graph, and shared tooling. The catch is that naive CI rebuilds everything on every change. Tools like <strong>Nx</strong> and <strong>Turborepo</strong> fix that with three ideas. A <strong>project graph</strong> knows who depends on whom. <strong>Affected detection</strong> builds only what a change can impact. <strong>Content-addressed caching</strong> hashes each task's inputs (source, dependencies, config, environment) and replays outputs from a local or shared <strong>remote cache</strong> if that exact hash ran before. Underneath, bundlers such as Vite, webpack or Rspack, plus <code>tsc</code>, ESLint and Jest, have their own incremental caches. Add enforced module boundaries and ownership, and the repo scales to hundreds of projects with CI times measured in minutes.</p>
+          </div>
+
+          <div class="subsection">
+            <h3>Monorepo vs polyrepo</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th></th><th>Polyrepo</th><th>Monorepo</th></tr></thead>
+                <tbody>
+                  <tr><td>Cross-project change</td><td>N PRs, publish, bump, coordinate</td><td>One atomic PR, tested together</td></tr>
+                  <tr><td>Dependency versions</td><td>Drift; several React versions</td><td>Single-version policy is possible</td></tr>
+                  <tr><td>Code sharing</td><td>Publish packages, then consume</td><td>Import directly; refactor across projects with the IDE</td></tr>
+                  <tr><td>CI cost</td><td>Small per repo</td><td>Large unless you use affected builds and caching</td></tr>
+                  <tr><td>Access control</td><td>Per-repo permissions</td><td>CODEOWNERS and boundary rules</td></tr>
+                  <tr><td>Tooling needs</td><td>Low</td><td>Requires a build system (Nx, Turborepo, Bazel)</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>A monorepo is not the same as a monolith. Projects can still deploy independently (including as micro-frontends, see Question 10); they just share a repository and toolchain.</p>
+          </div>
+
+          <div class="subsection">
+            <h3>The layers of a modern JS monorepo</h3>
+            <div class="card-grid">
+              <div class="card"><div class="card-label">Package manager</div><p><strong>pnpm workspaces</strong> (a content-addressed store with symlinks, strict so there are no phantom dependencies), Yarn Berry, npm workspaces.</p></div>
+              <div class="card c-teal"><div class="card-label">Task orchestrator</div><p><strong>Nx</strong> (project graph, generators, plugins, module boundaries) or <strong>Turborepo</strong> (lean, <code>package.json</code>-script based). Bazel or Rush for polyglot or huge repos.</p></div>
+              <div class="card c-amber"><div class="card-label">Bundler / compiler</div><p>Vite (esbuild + Rollup/Rolldown), webpack, Rspack (a Rust webpack), esbuild, SWC, tsc, Turbopack.</p></div>
+              <div class="card c-violet"><div class="card-label">Release tooling</div><p>Changesets or Nx Release for versioning, changelogs and publishing libraries that are consumed outside the repo.</p></div>
+            </div>
+          </div>
+
+          <div class="subsection">
+            <h3>Project graph, task graph and affected builds</h3>
+            <div class="diagram"><pre>  libs/<span class="hl">design-system</span> ◀── libs/checkout-ui ◀── apps/<span class="hl">checkout</span>
+         ▲                                         
+         └────────────── libs/search-ui ◀──── apps/<span class="hl">search</span>
+  libs/<span class="hl">utils</span> ◀───────────┘
+
+  PR changes libs/search-ui  →  affected = { search-ui, apps/search }
+  PR changes design-system   →  affected = everything that depends on it</pre></div>
+            <ul>
+              <li><strong>Project graph:</strong> built from <code>package.json</code> dependencies and TypeScript import analysis.</li>
+              <li><strong>Task graph:</strong> <code>build</code> of an app depends on <code>build</code> of its libraries (<code>"dependsOn": ["^build"]</code>, where <code>^</code> means "dependencies first"). Independent tasks run in parallel.</li>
+              <li><strong>Affected:</strong> diff against the base branch, map changed files to projects, then walk the graph to their dependents. Only those run lint, test and build.</li>
+            </ul>
+            <pre class="code" data-lang="bash"><code><span class="c"># Nx</span>
+npx nx affected -t lint test build --base=origin/main --parallel=<span class="n">8</span>
+npx nx graph                                  <span class="c"># visualise the project graph</span>
+
+<span class="c"># Turborepo</span>
+npx turbo run lint test build --affected      <span class="c"># changed packages + dependents vs the default branch</span>
+npx turbo run build --filter=<span class="s">"...[origin/main]"</span>  <span class="c"># explicit form of the same idea</span></code></pre>
+          </div>
+
+          <div class="subsection">
+            <h3>Computation caching: how it works</h3>
+            <div class="flow">
+              <div class="flow-step"><div class="flow-rail"><div class="flow-dot">1</div><div class="flow-line"></div></div><div class="flow-content"><strong>Hash the inputs</strong> of a task: source files in the project, hashes of dependency projects' outputs, the lockfile entries, tool config (tsconfig, vite config), declared environment variables, the command and its flags.</div></div>
+              <div class="flow-step"><div class="flow-rail"><div class="flow-dot">2</div><div class="flow-line"></div></div><div class="flow-content"><strong>Look up the hash</strong> in the local cache (<code>.nx/cache</code>, <code>.turbo</code>), then the <strong>remote cache</strong> (Nx Cloud, Vercel Remote Cache, or self-hosted on S3 or GCS).</div></div>
+              <div class="flow-step"><div class="flow-rail"><div class="flow-dot">3</div><div class="flow-line"></div></div><div class="flow-content"><strong>Hit:</strong> restore the declared outputs (<code>dist/</code>, <code>coverage/</code>) and replay the terminal logs in milliseconds. <strong>Miss:</strong> run the task, then store outputs under that hash.</div></div>
+              <div class="flow-step"><div class="flow-rail"><div class="flow-dot">4</div><div class="flow-line"></div></div><div class="flow-content">Because the remote cache is shared, <strong>a build done once by anyone</strong> (CI or a teammate) is free for everyone else.</div></div>
+            </div>
+            <pre class="code" data-lang="json"><code><span class="c">// turbo.json</span>
+{
+  <span class="s">"$schema"</span>: <span class="s">"https://turbo.build/schema.json"</span>,
+  <span class="s">"globalDependencies"</span>: [<span class="s">"tsconfig.base.json"</span>],
+  <span class="s">"tasks"</span>: {
+    <span class="s">"build"</span>: {
+      <span class="s">"dependsOn"</span>: [<span class="s">"^build"</span>],
+      <span class="s">"inputs"</span>: [<span class="s">"src/**"</span>, <span class="s">"package.json"</span>, <span class="s">"tsconfig.json"</span>, <span class="s">"vite.config.ts"</span>, <span class="s">"!**/*.test.*"</span>],
+      <span class="s">"outputs"</span>: [<span class="s">"dist/**"</span>],
+      <span class="s">"env"</span>: [<span class="s">"VITE_API_URL"</span>]
+    },
+    <span class="s">"test"</span>: { <span class="s">"dependsOn"</span>: [<span class="s">"^build"</span>], <span class="s">"outputs"</span>: [<span class="s">"coverage/**"</span>] },
+    <span class="s">"lint"</span>: {},
+    <span class="s">"dev"</span>: { <span class="s">"cache"</span>: <span class="k">false</span>, <span class="s">"persistent"</span>: <span class="k">true</span> }
+  }
+}</code></pre>
+            <pre class="code" data-lang="json"><code><span class="c">// nx.json</span>
+{
+  <span class="s">"namedInputs"</span>: {
+    <span class="s">"default"</span>: [<span class="s">"{projectRoot}/**/*"</span>, <span class="s">"sharedGlobals"</span>],
+    <span class="s">"production"</span>: [<span class="s">"default"</span>, <span class="s">"!{projectRoot}/**/*.spec.ts"</span>, <span class="s">"!{projectRoot}/**/*.stories.tsx"</span>],
+    <span class="s">"sharedGlobals"</span>: [<span class="s">"{workspaceRoot}/tsconfig.base.json"</span>, { <span class="s">"env"</span>: <span class="s">"VITE_API_URL"</span> }]
+  },
+  <span class="s">"targetDefaults"</span>: {
+    <span class="s">"build"</span>: { <span class="s">"dependsOn"</span>: [<span class="s">"^build"</span>], <span class="s">"inputs"</span>: [<span class="s">"production"</span>, <span class="s">"^production"</span>], <span class="s">"outputs"</span>: [<span class="s">"{projectRoot}/dist"</span>], <span class="s">"cache"</span>: <span class="k">true</span> },
+    <span class="s">"test"</span>:  { <span class="s">"inputs"</span>: [<span class="s">"default"</span>, <span class="s">"^production"</span>], <span class="s">"cache"</span>: <span class="k">true</span> },
+    <span class="s">"lint"</span>:  { <span class="s">"cache"</span>: <span class="k">true</span> }
+  }
+}</code></pre>
+            <div class="callout warn"><div class="callout-title">Cache correctness is the hard part</div>
+              <ul>
+                <li><strong>Undeclared inputs</strong> (an env var or a config file outside the project) produce false cache hits that ship wrong builds. Declare every input.</li>
+                <li><strong>Non-hermetic tasks</strong> (timestamps in output, network calls, reading <code>Date.now()</code>) make hashes useless or outputs nondeterministic.</li>
+                <li>Excluding tests from <code>production</code> inputs means editing a test doesn't invalidate the build. That's a big hit-rate win.</li>
+                <li><strong>Security:</strong> a writable remote cache is a supply-chain risk (cache poisoning). Let only trusted CI on the main branch write; PRs from forks read only. Use signed or encrypted artifacts.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="subsection">
+            <h3>Caching at every layer of CI</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Layer</th><th>What's cached</th><th>How</th></tr></thead>
+                <tbody>
+                  <tr><td>Dependencies</td><td>Package tarballs</td><td>Cache the pnpm store keyed on a hash of <code>pnpm-lock.yaml</code>; <code>pnpm install --frozen-lockfile</code></td></tr>
+                  <tr><td>Task outputs</td><td>Results of build, test and lint</td><td>Nx or Turborepo local and remote cache</td></tr>
+                  <tr><td>Bundler</td><td>Module transforms between runs</td><td>webpack <code>cache: { type: 'filesystem' }</code>; Rspack persistent cache; Vite <code>node_modules/.vite</code> pre-bundled deps</td></tr>
+                  <tr><td>TypeScript</td><td>Type-check state</td><td>Project references + <code>incremental</code> (<code>.tsbuildinfo</code>); <code>tsc -b</code> rebuilds only changed projects</td></tr>
+                  <tr><td>Lint / test</td><td>Per-file results</td><td><code>eslint --cache</code>; Jest or Vitest caches; run only related tests</td></tr>
+                  <tr><td>Containers</td><td>Image layers</td><td>Order the Dockerfile so dependencies install before copying source; BuildKit cache mounts</td></tr>
+                  <tr><td>Delivery</td><td>Built assets</td><td>Content-hashed filenames + immutable CDN caching (Question 2)</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="subsection">
+            <h3>Choosing the bundler</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Bundler</th><th>Dev experience</th><th>Production</th><th>Pick when</th></tr></thead>
+                <tbody>
+                  <tr><td>Vite</td><td>Native ESM dev server, instant start, fast HMR</td><td>Rollup / Rolldown; excellent output</td><td>Default for new SPAs and libraries; Vitest integration</td></tr>
+                  <tr><td>webpack 5</td><td>Slower on big apps</td><td>Mature, most configurable</td><td>Existing large configs, Module Federation, niche loaders</td></tr>
+                  <tr><td>Rspack</td><td>webpack-compatible, 5–10× faster</td><td>webpack-like output</td><td>Speed up an existing webpack setup with minimal migration</td></tr>
+                  <tr><td>esbuild</td><td>Extremely fast</td><td>Fewer optimisations (no fine-grained chunking)</td><td>Libraries, tooling, quick transforms</td></tr>
+                  <tr><td>Turbopack</td><td>Incremental, function-level caching</td><td>Next.js builds</td><td>You're on Next.js</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p><strong>Libraries in a monorepo:</strong> internal libraries often don't need their own build. Apps can consume TypeScript source directly through workspace path aliases, and the app's bundler compiles it. Build only libraries that are published externally. This removes a whole layer of tasks and stale <code>dist</code> problems.</p>
+          </div>
+
+          <div class="subsection">
+            <h3>Governance: boundaries and ownership</h3>
+            <p>Without rules, a monorepo becomes a "big ball of mud" where anything imports anything. Tag projects and enforce allowed dependencies in lint:</p>
+            <pre class="code" data-lang="js"><code><span class="c">// eslint.config.js (Nx)</span>
+<span class="s">'@nx/enforce-module-boundaries'</span>: [<span class="s">'error'</span>, {
+  depConstraints: [
+    { sourceTag: <span class="s">'type:app'</span>,     onlyDependOnLibsWithTags: [<span class="s">'type:feature'</span>, <span class="s">'type:ui'</span>, <span class="s">'type:util'</span>] },
+    { sourceTag: <span class="s">'type:feature'</span>, onlyDependOnLibsWithTags: [<span class="s">'type:ui'</span>, <span class="s">'type:data'</span>, <span class="s">'type:util'</span>] },
+    { sourceTag: <span class="s">'type:ui'</span>,      onlyDependOnLibsWithTags: [<span class="s">'type:ui'</span>, <span class="s">'type:util'</span>] },
+    { sourceTag: <span class="s">'scope:checkout'</span>, onlyDependOnLibsWithTags: [<span class="s">'scope:checkout'</span>, <span class="s">'scope:shared'</span>] },
+  ],
+}]</code></pre>
+            <ul>
+              <li><strong>CODEOWNERS</strong> per directory, so the right team reviews changes.</li>
+              <li><strong>Single-version policy</strong> for core dependencies (React, TypeScript), managed with pnpm catalogs or syncpack and upgraded by a platform team with codemods.</li>
+              <li><strong>Generators</strong> (<code>nx g</code>, plop) scaffold new projects with the standard config, tags and CI wiring.</li>
+              <li><strong>Track metrics:</strong> CI p50 and p90 duration, cache hit rate, affected-project count per PR, and flaky test rate.</li>
+            </ul>
+          </div>
+
+          <div class="subsection">
+            <h3>Interviewer follow-ups</h3>
+            <div class="qa-toolbar"><button class="text-btn" data-expand>Expand all</button></div>
+            <details class="qa">
+              <summary>CI on the monorepo takes 40 minutes. How do you get it under 10?</summary>
+              <div class="qa-a"><ul>
+                <li>Measure where the time goes with task timings from Nx or Turborepo run summaries.</li>
+                <li>Turn on affected runs and a remote cache, then check the hit rate. A low hit rate usually means overly broad inputs (a root file in every hash) or nondeterministic outputs.</li>
+                <li>Parallelise and distribute tasks across agents (Nx Agents, or a CI matrix sharded by project).</li>
+                <li>Cache the pnpm store and use persistent bundler caches.</li>
+                <li>Split slow E2E tests into a separate pipeline (affected-only on PRs, full suite nightly).</li>
+                <li>Switch slow tools: webpack to Rspack or Vite, Jest to Vitest, Babel to SWC.</li>
+              </ul></div>
+            </details>
+            <details class="qa">
+              <summary>Nx or Turborepo?</summary>
+              <div class="qa-a"><p><strong>Turborepo</strong> is minimal and stays close to <code>package.json</code> scripts: great for small or medium repos that want caching and affected runs without much adoption cost. <strong>Nx</strong> is a fuller platform: an inferred project graph, generators, framework plugins, module-boundary enforcement, distributed task execution, and automated migrations (<code>nx migrate</code>). For dozens of teams that need governance, Nx usually pays off. Both support remote caching.</p></div>
+            </details>
+            <details class="qa">
+              <summary>How do you migrate several polyrepos into a monorepo?</summary>
+              <div class="qa-a"><p>Import the repos with history (<code>git subtree</code> or <code>nx import</code>) into <code>apps/</code> and <code>libs/</code>. Initially keep each project's own build and CI scripts, wrapped as tasks. Then unify tooling one piece at a time: TypeScript base config, lint, test runner, then dependency versions. Introduce tags and boundaries early. Keep publishing shared packages until all consumers are inside the monorepo, then switch them to workspace imports.</p></div>
+            </details>
+          </div>
+        </section>
+
+        <!-- ================= Q15 ================= -->
+        <section class="page" id="q15" hidden
+          data-short="Observability &amp; Percentiles"
+          data-title="Frontend Observability: RUM, Custom Telemetry, Tracing, Alerting &amp; Percentiles"
+          data-summary="Attributing LCP/INP/CLS, custom metrics, error tracking, W3C trace context, SLO burn-rate alerts to PagerDuty, and p50/p90/p95/p99.">
+          <div class="q-header">
+            <div class="q-number">15</div>
+            <h2>Frontend Observability<span class="q-sub">RUM, custom telemetry, distributed tracing, automated alerting, and what p50/p90/p95/p99 mean</span></h2>
+          </div>
+          <div class="q-meta"><span class="tag">RUM</span><span class="tag">OpenTelemetry</span><span class="tag">traceparent</span><span class="tag">SLOs</span><span class="tag">PagerDuty</span><span class="tag">Percentiles</span></div>
+
+          <div class="callout script">
+            <div class="callout-title">60-second answer</div>
+            <p>Observability means being able to answer <em>"what is the user experiencing, and why?"</em> without shipping new code. On the frontend it has four parts. <strong>RUM</strong> captures Core Web Vitals with attribution, so a poor LCP or INP comes with the element or script responsible. <strong>Custom telemetry</strong> covers business-meaningful timings and errors, tagged with release, route and device. <strong>Distributed tracing</strong> uses the W3C <code>traceparent</code> header to link a slow click to the exact backend span. <strong>Alerting</strong> is driven by SLOs and error-budget burn rates and routed to on-call through PagerDuty with runbooks. Everything is reported as <strong>percentiles</strong> (p75 for Web Vitals, p95 and p99 for tail latency), never averages, because averages hide the users who are suffering.</p>
+          </div>
+
+          <div class="subsection">
+            <h3>Monitoring vs observability</h3>
+            <p><strong>Monitoring</strong> tells you <em>that</em> something is wrong, using predefined dashboards and thresholds. <strong>Observability</strong> lets you ask new questions about <em>why</em>, by slicing high-cardinality data (release, route, browser, country, experiment, user tier) after the fact.</p>
+            <div class="card-grid">
+              <div class="card"><div class="card-label">Metrics</div><p>Aggregated numbers over time: LCP p75, error rate, API latency histograms. Cheap; good for alerting.</p></div>
+              <div class="card c-teal"><div class="card-label">Logs and events</div><p>Discrete, structured records: errors with stack traces, user actions, breadcrumbs. Rich context.</p></div>
+              <div class="card c-violet"><div class="card-label">Traces</div><p>The causal timeline of one operation across services: click → fetch → gateway → service → DB.</p></div>
+              <div class="card c-amber"><div class="card-label">Session replay</div><p>A DOM-level reconstruction of what the user saw, with PII masked. Shows the context behind an error.</p></div>
+            </div>
+          </div>
+
+          <div class="subsection">
+            <h3>RUM for Core Web Vitals, with attribution</h3>
+            <p>Knowing that "LCP is 3.8 s" isn't actionable. Knowing <em>which part</em> of it is slow and <em>which element or script</em> is responsible is. The <code>web-vitals/attribution</code> build provides this breakdown (thresholds are in Question 5).</p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Metric</th><th>Break it down into</th><th>Points you to</th></tr></thead>
+                <tbody>
+                  <tr><td>LCP</td><td>TTFB → resource load delay → resource load duration → element render delay</td><td>Server or CDN, late discovery (missing preload), heavy image, render-blocking JS or CSS</td></tr>
+                  <tr><td>INP</td><td>Input delay → processing duration → presentation delay</td><td>Busy main thread when the user clicked, slow handlers or re-renders, expensive layout or paint after the update</td></tr>
+                  <tr><td>CLS</td><td>Largest shift session window and its source nodes</td><td>The exact element that moved: images without dimensions, late banners, font swaps</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <pre class="code" data-lang="ts"><code><span class="k">import</span> { onLCP, onINP, onCLS } <span class="k">from</span> <span class="s">'web-vitals/attribution'</span>;
+
+<span class="f">onINP</span>(({ value, rating, attribution }) =&gt; <span class="f">send</span>(<span class="s">'web-vital'</span>, {
+  name: <span class="s">'INP'</span>, value, rating,
+  target: attribution.interactionTarget,           <span class="c">// e.g. "button#apply-filters"</span>
+  type: attribution.interactionType,               <span class="c">// pointer | keyboard</span>
+  inputDelay: attribution.inputDelay,
+  processing: attribution.processingDuration,
+  presentation: attribution.presentationDelay,
+  script: attribution.longAnimationFrameEntries?.[<span class="n">0</span>]?.scripts?.[<span class="n">0</span>]?.sourceURL,
+}));
+
+<span class="f">onLCP</span>(({ value, attribution }) =&gt; <span class="f">send</span>(<span class="s">'web-vital'</span>, {
+  name: <span class="s">'LCP'</span>, value,
+  element: attribution.target,
+  url: attribution.url,
+  ttfb: attribution.timeToFirstByte,
+  loadDelay: attribution.resourceLoadDelay,
+  loadDuration: attribution.resourceLoadDuration,
+  renderDelay: attribution.elementRenderDelay,
+}));
+
+<span class="f">onCLS</span>(({ value, attribution }) =&gt; <span class="f">send</span>(<span class="s">'web-vital'</span>, { name: <span class="s">'CLS'</span>, value, shiftTarget: attribution.largestShiftTarget }));</code></pre>
+            <p><strong>Dimensions to attach to every event:</strong> release version, route template (<code>/product/:id</code>, never raw URLs), device class, effective connection type, country, browser, logged-in state, experiment variants, and a session ID. Those dimensions are what turn data into answers.</p>
+          </div>
+
+          <div class="subsection">
+            <h3>Custom telemetry</h3>
+            <h4>Business-meaningful timings</h4>
+            <p>Web Vitals are generic. Your product has its own "moment of value", such as search results shown, a chart rendered, or a checkout step ready. Measure those with the User Timing API:</p>
+            <pre class="code" data-lang="ts"><code><span class="c">// When the user submits a search</span>
+performance.<span class="f">mark</span>(<span class="s">'search:submit'</span>);
+
+<span class="c">// After results have actually rendered (next frame after commit)</span>
+<span class="f">useEffect</span>(() =&gt; {
+  <span class="k">if</span> (!results) <span class="k">return</span>;
+  <span class="f">requestAnimationFrame</span>(() =&gt; {
+    performance.<span class="f">mark</span>(<span class="s">'search:rendered'</span>);
+    <span class="k">const</span> m = performance.<span class="f">measure</span>(<span class="s">'search-to-results'</span>, <span class="s">'search:submit'</span>, <span class="s">'search:rendered'</span>);
+    <span class="f">send</span>(<span class="s">'custom-timing'</span>, { name: m.name, ms: m.duration, resultCount: results.length });
+  });
+}, [results]);</code></pre>
+            <h4>Error tracking</h4>
+            <pre class="code" data-lang="ts"><code><span class="f">addEventListener</span>(<span class="s">'error'</span>, (e) =&gt; <span class="f">send</span>(<span class="s">'js-error'</span>, {
+  message: e.message, stack: e.error?.stack, file: e.filename, line: e.lineno, col: e.colno,
+}));
+<span class="f">addEventListener</span>(<span class="s">'unhandledrejection'</span>, (e) =&gt; <span class="f">send</span>(<span class="s">'unhandled-rejection'</span>, {
+  reason: String(e.reason), stack: e.reason?.stack,
+}));
+<span class="c">// Plus: error boundaries (Question 13), failed fetches (status, route, duration), CSP reports</span></code></pre>
+            <ul>
+              <li><strong>Source maps:</strong> upload them privately to the error tracker (Sentry, Datadog) at build time, tagged with the release, so minified stacks become readable. Don't serve them publicly.</li>
+              <li><strong>Grouping:</strong> fingerprint by normalised stack plus message to avoid thousands of duplicate issues. Filter noise from extensions, bots and <code>ResizeObserver</code> loop warnings.</li>
+              <li><strong>Breadcrumbs:</strong> record the last N clicks, navigations and requests before the error.</li>
+              <li><strong>Privacy:</strong> scrub PII (emails, tokens, card numbers) on the client <em>and</em> at ingestion, honour consent, and mask inputs in session replay.</li>
+              <li><strong>Cost control:</strong> sample high-volume events (for example 10% of sessions for performance, 100% of errors), batch them, and send with <code>sendBeacon</code> on <code>visibilitychange</code>.</li>
+            </ul>
+          </div>
+
+          <div class="subsection">
+            <h3>Distributed tracing from the browser</h3>
+            <p>A trace is a tree of <strong>spans</strong> sharing one <strong>trace ID</strong>. When the frontend starts the trace and propagates it on every API call, one ID links the user's click to every backend hop.</p>
+            <div class="diagram"><pre>trace 4bf92f3577b34da6a3ce929d0e0e4736
+├─ [browser]  click "Apply filters"           ████████████████████  1,240 ms
+│  ├─ [browser] fetch /api/search              ██████████████████    1,050 ms
+│  │  ├─ [gateway] auth + route                ██                      40 ms
+│  │  └─ [search-svc] GET /search              ████████████████       980 ms
+│  │     ├─ [search-svc] cache lookup (miss)   █                       12 ms
+│  │     └─ [search-svc] <span class="no">elasticsearch query</span>     ███████████████         <span class="no">920 ms</span>  ◀── culprit
+│  └─ [browser] render results                 ██                     150 ms</pre></div>
+            <p>Context travels in the W3C <strong><code>traceparent</code></strong> header:</p>
+            <pre class="code" data-lang="http"><code>traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+             │  │                                │                │
+             │  trace-id (16 bytes, hex)         parent span-id   flags (01 = sampled)
+             version</code></pre>
+            <pre class="code" data-lang="ts"><code><span class="c">// OpenTelemetry web SDK (v2-style setup)</span>
+<span class="k">import</span> { WebTracerProvider } <span class="k">from</span> <span class="s">'@opentelemetry/sdk-trace-web'</span>;
+<span class="k">import</span> { BatchSpanProcessor } <span class="k">from</span> <span class="s">'@opentelemetry/sdk-trace-base'</span>;
+<span class="k">import</span> { OTLPTraceExporter } <span class="k">from</span> <span class="s">'@opentelemetry/exporter-trace-otlp-http'</span>;
+<span class="k">import</span> { registerInstrumentations } <span class="k">from</span> <span class="s">'@opentelemetry/instrumentation'</span>;
+<span class="k">import</span> { FetchInstrumentation } <span class="k">from</span> <span class="s">'@opentelemetry/instrumentation-fetch'</span>;
+<span class="k">import</span> { DocumentLoadInstrumentation } <span class="k">from</span> <span class="s">'@opentelemetry/instrumentation-document-load'</span>;
+
+<span class="k">const</span> provider = <span class="k">new</span> <span class="f">WebTracerProvider</span>({
+  spanProcessors: [<span class="k">new</span> <span class="f">BatchSpanProcessor</span>(<span class="k">new</span> <span class="f">OTLPTraceExporter</span>({ url: <span class="s">'/otel/v1/traces'</span> }))],
+});
+provider.<span class="f">register</span>();
+
+<span class="f">registerInstrumentations</span>({
+  instrumentations: [
+    <span class="k">new</span> <span class="f">DocumentLoadInstrumentation</span>(),
+    <span class="k">new</span> <span class="f">FetchInstrumentation</span>({
+      propagateTraceHeaderCorsUrls: [<span class="s">/^https:\/\/api\.acme\.com/</span>], <span class="c">// only your own APIs</span>
+    }),
+  ],
+});</code></pre>
+            <ul>
+              <li><strong>CORS:</strong> cross-origin APIs must allow the header (<code>Access-Control-Allow-Headers: traceparent, tracestate</code>). Never send trace headers to third parties.</li>
+              <li><strong>Server-Timing</strong> brings backend timings into the browser's resource timing (<code>Server-Timing: db;dur=920, cache;desc="miss"</code>), so RUM can show backend time without a full trace.</li>
+              <li><strong>Correlation ID:</strong> also log the trace ID in RUM events and error reports, so a support ticket or Sentry issue links straight to the backend trace.</li>
+              <li><strong>Sampling:</strong> head-based (decide at the start, e.g. 5%) is cheap. Tail-based (keep all slow or errored traces, done in the collector) catches the interesting ones.</li>
+            </ul>
+          </div>
+
+          <div class="subsection">
+            <h3>Automated alerting and on-call</h3>
+            <p>Alert on <strong>symptoms users feel</strong> (SLO violations), not on every cause (CPU, a single error). Each page must be urgent, actionable and owned.</p>
+            <h4>SLIs, SLOs and error budgets</h4>
+            <ul>
+              <li><strong>SLI</strong> (indicator): for example, "share of page loads with LCP ≤ 2.5 s" or "share of checkout API calls that succeed in under 1 s".</li>
+              <li><strong>SLO</strong> (objective): for example, "99% of checkout calls succeed, measured over 28 days".</li>
+              <li><strong>Error budget</strong> = 100% − SLO = 1% of requests may fail. Spending it fast triggers alerts; exhausting it freezes risky launches.</li>
+            </ul>
+            <h4>Burn-rate alerts</h4>
+            <p>Burn rate is how fast the budget is being consumed relative to plan (1× = exactly on budget over the window). The common multi-window pattern is:</p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Severity</th><th>Condition</th><th>Meaning</th><th>Action</th></tr></thead>
+                <tbody>
+                  <tr><td>Page (P1)</td><td>Burn ≥ 14.4× over 1 h <strong>and</strong> 5 min</td><td>2% of a 30-day budget gone in one hour</td><td>PagerDuty high urgency, wake someone</td></tr>
+                  <tr><td>Page (P2)</td><td>Burn ≥ 6× over 6 h <strong>and</strong> 30 min</td><td>5% of the budget in 6 hours</td><td>PagerDuty, respond within the hour</td></tr>
+                  <tr><td>Ticket</td><td>Burn ≥ 1× over 3 days</td><td>Slow, steady degradation</td><td>Jira ticket for the owning team</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>The short window confirms the problem is <em>still happening</em>, so the alert resolves quickly after a fix and doesn't page for a blip that has already passed.</p>
+            <h4>Frontend alert examples</h4>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Alert</th><th>Signal</th><th>Route to</th></tr></thead>
+                <tbody>
+                  <tr><td>JS error rate spike after deploy</td><td>Errors per 1k sessions &gt; 3× baseline for 10 min, grouped by release</td><td>Owning team's PagerDuty service; auto-rollback or a canary halt</td></tr>
+                  <tr><td>Checkout success SLO burn</td><td>Failed <code>payment_completed</code> vs <code>booking_initiated</code> ratio</td><td>Checkout on-call (P1)</td></tr>
+                  <tr><td>LCP p75 regression</td><td>p75 above 2.5 s on a top template for 1 h</td><td>Ticket to the web performance channel</td></tr>
+                  <tr><td>Chunk load failures</td><td><code>ChunkLoadError</code> rate &gt; 0.5%</td><td>Platform on-call (CDN or deploy issue)</td></tr>
+                  <tr><td>Third-party script failing</td><td>Fallback render count for the payments widget</td><td>Vendor integration owner</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <ul>
+              <li><strong>PagerDuty practice:</strong> one service per owning team, an escalation policy (primary → secondary → manager), urgency by severity, deduplication keys so 500 identical alerts become one incident, and a <strong>runbook link</strong> in every alert.</li>
+              <li><strong>Deploy correlation:</strong> annotate dashboards with releases, run canaries (1% → 10% → 100%) gated on error rate and Web Vitals, and roll back automatically on regression.</li>
+              <li><strong>Avoid alert fatigue:</strong> review every page in a weekly on-call retro. Delete or downgrade alerts that weren't actionable, and use statistical baselines for noisy metrics.</li>
+            </ul>
+          </div>
+
+          <div class="subsection">
+            <h3>Percentiles: p50, p75, p90, p95, p99</h3>
+            <p>A percentile <strong>pN</strong> is the value below which <strong>N% of observations</strong> fall. With p95 = 1.2 s, 95% of requests were 1.2 s or faster, and 5% were slower.</p>
+            <div class="metrics">
+              <div class="metric"><div class="lbl">p50 · median</div><div class="val">Typical</div><div class="desc">The experience of the middle user. Half are faster, half slower.</div></div>
+              <div class="metric"><div class="lbl">p75</div><div class="val">Web Vitals</div><div class="desc">Google's threshold for Core Web Vitals: 3 in 4 visits must be "good".</div></div>
+              <div class="metric"><div class="lbl">p90 / p95</div><div class="val">Tail</div><div class="desc">Slower devices and networks. Common for API latency SLOs.</div></div>
+              <div class="metric"><div class="lbl">p99 / p99.9</div><div class="val">Extreme tail</div><div class="desc">1 in 100 (or 1,000) requests. Often your heaviest, most valuable users.</div></div>
+            </div>
+            <h4>Worked example: 10 page-load times</h4>
+            <p>Sorted (ms): <code>120, 130, 150, 160, 180, 200, 220, 260, 400, 1900</code></p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Statistic</th><th>Value</th><th>How (nearest-rank: rank = ⌈p × n⌉)</th></tr></thead>
+                <tbody>
+                  <tr><td>Mean</td><td>372 ms</td><td>3,720 ÷ 10. Slower than 8 of 10 users, so it describes nobody.</td></tr>
+                  <tr><td>p50</td><td>180 ms</td><td>⌈0.5 × 10⌉ = 5th value (linear interpolation would give 190 ms)</td></tr>
+                  <tr><td>p90</td><td>400 ms</td><td>⌈0.9 × 10⌉ = 9th value</td></tr>
+                  <tr><td>p95 / p99</td><td>1,900 ms</td><td>⌈0.95 × 10⌉ = 10th value. With only 10 samples, the tail is a single outlier.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="callout info"><div class="callout-title">Why percentiles and not averages</div>
+              <ul>
+                <li>Latency distributions are <strong>skewed</strong> (long right tail). One 30-second outlier moves the mean dramatically while the median barely moves.</li>
+                <li><strong>Tail amplification:</strong> if a page makes 50 requests, each with a 1% chance of being slow (p99), then 1 − 0.99<sup>50</sup> ≈ <strong>39.5%</strong> of page loads hit at least one slow request. Tails become the common case at scale.</li>
+                <li><strong>You can't average percentiles.</strong> The average of hourly p95s is not the daily p95. Aggregate raw values or <strong>histograms / sketches</strong> (HDR histograms, t-digest, DDSketch) and compute percentiles from the merged distribution.</li>
+                <li><strong>Sample size matters:</strong> p99 needs many hundreds or thousands of samples to be stable. Show sample counts next to percentiles, and be wary of p99 on small segments.</li>
+                <li>Report several together (p50 for the typical experience, p75 for Web Vitals, p95 or p99 for SLOs), segmented by device and region.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="subsection">
+            <h3>Interviewer follow-ups</h3>
+            <div class="qa-toolbar"><button class="text-btn" data-expand>Expand all</button></div>
+            <details class="qa">
+              <summary>Users report the app "feels slow", but every dashboard is green. What do you do?</summary>
+              <div class="qa-a"><p>Green dashboards usually show averages or p50 across all traffic. Segment by device class, country, browser, route and customer tier, and look at p95 and p99: the complaints often come from a slow tail (low-end Android, one region, enterprise customers with huge datasets). Check INP, not just load metrics, because "feels slow" is usually interaction latency. Pull session replays and traces for the affected users. Then add an SLI that reflects their experience so it can't hide again.</p></div>
+            </details>
+            <details class="qa">
+              <summary>How do you keep RUM and telemetry from hurting performance?</summary>
+              <div class="qa-a"><p>Load the SDK async and after the main content, keep it small (under ~10–15 KB), batch events and send them during idle time or on <code>visibilitychange</code> with <code>sendBeacon</code>, sample high-volume streams, avoid synchronous storage access in hot paths, and measure the SDK's own cost with long animation frame attribution. Session replay is expensive, so sample it heavily or trigger it only on errors.</p></div>
+            </details>
+            <details class="qa">
+              <summary>What should a good alert runbook contain?</summary>
+              <div class="qa-a"><p>What the alert means in user terms, the dashboards and queries to open, common causes with how to confirm each, immediate mitigations (roll back, flip a kill switch, fail over a CDN), escalation contacts (owning team, vendor), and how to verify recovery. Link it directly from the PagerDuty incident, and update it after every incident retrospective.</p></div>
+            </details>
+          </div>
+        </section>
+
+        <!-- ================= Q16 ================= -->
+        <section class="page" id="q16" hidden
+          data-short="Design Systems &amp; WCAG"
+          data-title="Governing a Design System Across Dozens of Teams (Versioning, Tree Shaking, WCAG in CI)"
+          data-summary="Governance and contribution models, semver and breaking-change migrations with codemods, tree shaking explained, WCAG explained and enforced in CI.">
+          <div class="q-header">
+            <div class="q-number">16</div>
+            <h2>Design Systems &amp; Accessibility at Scale<span class="q-sub">Governing a shared component library across dozens of teams</span></h2>
+          </div>
+          <div class="q-meta"><span class="tag">Governance</span><span class="tag">SemVer</span><span class="tag">Codemods</span><span class="tag">Tree shaking</span><span class="tag">WCAG 2.2 AA</span><span class="tag">axe in CI</span></div>
+
+          <div class="callout script">
+            <div class="callout-title">60-second answer</div>
+            <p>A design system is a <strong>product</strong> whose customers are internal teams, so I run it like one. <strong>Governance:</strong> a core team owns the foundations (tokens, primitives, accessibility), product teams contribute through an RFC process, and adoption is measured rather than mandated. <strong>Versioning:</strong> strict SemVer, deprecations that warn for at least one major version, and every breaking change shipped with a <strong>codemod</strong> and a migration guide, so upgrading takes minutes. <strong>Performance:</strong> the library ships as ESM with <code>sideEffects</code> declared, so <strong>tree shaking</strong> means teams only pay for the components they import. <strong>Accessibility:</strong> components meet <strong>WCAG 2.2 AA</strong> by default, and that's enforced automatically with lint rules, axe checks on every Storybook story and key page in CI, and token-level contrast checks, plus manual screen-reader audits.</p>
+          </div>
+
+          <div class="subsection">
+            <h3>Anatomy of a design system</h3>
+            <div class="diagram"><pre>  <span class="hl">Design tokens</span>        color.brand.600, space.4, radius.md, font.body   (W3C DTCG JSON → Style Dictionary)
+        │                → CSS variables, TS constants, iOS/Android values
+        ▼
+  <span class="hl">Primitives</span>           Box, Text, Stack, VisuallyHidden, FocusRing       (often on headless libs: React Aria / Radix)
+        ▼
+  <span class="hl">Components</span>           Button, TextField, Select, Dialog, Tabs, Toast    (a11y, theming, tests, docs built in)
+        ▼
+  <span class="hl">Patterns / recipes</span>   Forms, empty states, data tables, page layouts
+        ▼
+  <span class="hl">Docs + tooling</span>       Storybook, usage guidelines, Figma library, lint rules, codemods, usage analytics</pre></div>
+          </div>
+
+          <div class="subsection">
+            <h3>Governance across dozens of teams</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Model</th><th>How it works</th><th>Risk</th></tr></thead>
+                <tbody>
+                  <tr><td>Centralised</td><td>A core team builds everything</td><td>Bottleneck; teams fork or build their own</td></tr>
+                  <tr><td>Federated</td><td>Product teams build, with a council for consistency</td><td>Inconsistency, nobody owns quality</td></tr>
+                  <tr><td><strong>Hybrid (recommended)</strong></td><td>The core team owns foundations and the review bar; product teams contribute components through a defined process</td><td>Needs a clear contribution process and investment</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <h4>Contribution flow</h4>
+            <div class="flow">
+              <div class="flow-step"><div class="flow-rail"><div class="flow-dot">1</div><div class="flow-line"></div></div><div class="flow-content"><strong>Proposal / RFC:</strong> the problem, use cases from at least two teams (avoiding one-off components), API sketch, and accessibility considerations.</div></div>
+              <div class="flow-step"><div class="flow-rail"><div class="flow-dot">2</div><div class="flow-line"></div></div><div class="flow-content"><strong>Design and API review</strong> with design system designers and engineers. Check for overlap with existing components.</div></div>
+              <div class="flow-step"><div class="flow-rail"><div class="flow-dot">3</div><div class="flow-line"></div></div><div class="flow-content"><strong>Build to the definition of done:</strong> tokens only (no hard-coded colours), keyboard and screen-reader support, tests, stories, docs, and a bundle-size check.</div></div>
+              <div class="flow-step"><div class="flow-rail"><div class="flow-dot">4</div><div class="flow-line"></div></div><div class="flow-content"><strong>Release with a maturity label:</strong> <code>experimental</code> (may change) → <code>beta</code> → <code>stable</code> (full SemVer guarantees).</div></div>
+            </div>
+            <ul>
+              <li><strong>Measure adoption:</strong> scan repos for imports (for example, a component usage scanner in CI), track the design system's share of UI versus custom components, version spread across apps, and detached Figma instances.</li>
+              <li><strong>Make the right thing easy:</strong> great docs, copy-paste examples, office hours, a Slack channel, and fast PR review. Teams fork when the system is slower than building their own.</li>
+              <li><strong>Escape hatches:</strong> allow composition (slots, <code>asChild</code>, render props) and controlled overrides (<code>className</code>, tokens) rather than forks.</li>
+              <li><strong>Lint guardrails:</strong> rules that flag raw hex colours, re-implemented buttons (<code>&lt;div onClick&gt;</code>), and deprecated props.</li>
+            </ul>
+          </div>
+
+          <div class="subsection">
+            <h3>Versioning strategies</h3>
+            <p><strong>Semantic Versioning (MAJOR.MINOR.PATCH)</strong>: patch for bug fixes, minor for backward-compatible features, major for breaking changes. For a UI library, define "breaking" explicitly:</p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Change</th><th>Breaking?</th></tr></thead>
+                <tbody>
+                  <tr><td>Removing or renaming a prop, changing its type or default</td><td>Yes (major)</td></tr>
+                  <tr><td>Changing DOM structure, class names or roles that consumers rely on (tests, selectors)</td><td>Treat as major, or document as unsupported internals</td></tr>
+                  <tr><td>Significant visual change (size, spacing) that can break layouts</td><td>Usually major, or behind a theme or flag</td></tr>
+                  <tr><td>Raising a peer dependency minimum (React 18 → 19)</td><td>Yes</td></tr>
+                  <tr><td>Adding an optional prop or a new component</td><td>No (minor)</td></tr>
+                  <tr><td>Fixing an accessibility bug</td><td>Patch, even if it changes markup slightly</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Strategy</th><th>Description</th><th>Trade-off</th></tr></thead>
+                <tbody>
+                  <tr><td>Single package, one version</td><td><code>@acme/ds@5.3.0</code> contains everything</td><td>Simple mental model; any breaking change forces a major for all</td></tr>
+                  <tr><td>Fixed / locked multi-package</td><td><code>@acme/button</code>, <code>@acme/dialog</code>, all released at the same version</td><td>Granular installs, coherent versions; extra version bumps</td></tr>
+                  <tr><td>Independent multi-package</td><td>Each package has its own version</td><td>Fine-grained upgrades; compatibility matrix complexity</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <ul>
+              <li><strong>Release automation:</strong> Changesets (contributors add a change file describing the bump, and CI versions, changelogs and publishes).</li>
+              <li><strong>Release channels:</strong> <code>canary</code> (every merge), <code>next</code> (major pre-release), <code>latest</code>.</li>
+              <li><strong>Support policy:</strong> for example, the current major gets features and fixes, the previous major gets security and accessibility fixes for 6–12 months, and older ones are unsupported.</li>
+              <li><strong>Peer dependencies</strong> for React (<code>"react": "^18.2.0 || ^19.0.0"</code>), never bundled, so apps don't get two Reacts.</li>
+              <li><strong>Visual regression testing</strong> (Chromatic, Playwright screenshots) on every component story catches unintended visual "breaking" changes.</li>
+            </ul>
+          </div>
+
+          <div class="subsection">
+            <h3>Breaking-change migrations at scale</h3>
+            <p>Shipping a major is easy. Getting 40 teams onto it is the real work. Make migration nearly free:</p>
+            <div class="flow">
+              <div class="flow-step"><div class="flow-rail"><div class="flow-dot">1</div><div class="flow-line"></div></div><div class="flow-content"><strong>Deprecate first (minor release):</strong> keep the old API working, log a dev-only warning with the replacement and the codemod command.</div></div>
+              <div class="flow-step"><div class="flow-rail"><div class="flow-dot">2</div><div class="flow-line"></div></div><div class="flow-content"><strong>Ship a codemod</strong> that automatically rewrites call sites. Teams run one command and review the diff.</div></div>
+              <div class="flow-step"><div class="flow-rail"><div class="flow-dot">3</div><div class="flow-line"></div></div><div class="flow-content"><strong>Automate PRs:</strong> Renovate bumps the version, and a bot runs the codemod in each repo. In a monorepo, the design system team runs it themselves in one PR.</div></div>
+              <div class="flow-step"><div class="flow-rail"><div class="flow-dot">4</div><div class="flow-line"></div></div><div class="flow-content"><strong>Track and support:</strong> an adoption dashboard per team, office hours, and a migration guide with before/after examples.</div></div>
+              <div class="flow-step"><div class="flow-rail"><div class="flow-dot">5</div><div class="flow-line"></div></div><div class="flow-content"><strong>Remove in the next major</strong> once usage is near zero, with a published timeline.</div></div>
+            </div>
+            <pre class="code" data-lang="tsx"><code><span class="c">// 1. Deprecation warning (development only, logged once)</span>
+<span class="k">export function</span> <span class="f">Button</span>({ kind, variant = kind ?? <span class="s">'primary'</span>, ...props }: ButtonProps) {
+  <span class="k">if</span> (process.env.NODE_ENV !== <span class="s">'production'</span> &amp;&amp; kind !== <span class="k">undefined</span>) {
+    <span class="f">warnOnce</span>(<span class="s">'Button: `kind` is deprecated and will be removed in v6. Use `variant`. '</span> +
+             <span class="s">'Run: npx @acme/ds-codemods button-kind-to-variant src/'</span>);
+  }
+  <span class="k">return</span> &lt;button className={styles[variant]} {...props} /&gt;;
+}</code></pre>
+            <pre class="code" data-lang="js"><code><span class="c">// 2. Codemod with jscodeshift: &lt;Button kind="x"&gt; → &lt;Button variant="x"&gt;</span>
+<span class="k">export default function</span> <span class="f">transformer</span>(file, api) {
+  <span class="k">const</span> j = api.jscodeshift;
+  <span class="k">return</span> <span class="f">j</span>(file.source)
+    .<span class="f">find</span>(j.JSXOpeningElement, { name: { name: <span class="s">'Button'</span> } })
+    .<span class="f">find</span>(j.JSXAttribute, { name: { name: <span class="s">'kind'</span> } })
+    .<span class="f">forEach</span>((path) =&gt; { path.node.name.name = <span class="s">'variant'</span>; })
+    .<span class="f">toSource</span>();
+}
+<span class="c">// npx jscodeshift -t button-kind-to-variant.js src --parser=tsx --extensions=tsx,ts</span></code></pre>
+            <p>Production codemods should also check that <code>Button</code> was imported from your package (not another library), handle spread props, and report call sites they couldn't transform for manual follow-up.</p>
+          </div>
+
+          <div class="subsection">
+            <h3>What tree shaking is, and how to make a library tree-shakeable</h3>
+            <p><strong>Tree shaking</strong> is dead-code elimination based on the <strong>static ES module graph</strong>. Because <code>import</code> and <code>export</code> are static (they can't be conditional or computed), the bundler can determine at build time which exports are actually used. It marks unused exports, and the minifier (Terser, esbuild, SWC) removes them from the final bundle. The name comes from shaking a tree so the dead leaves fall off.</p>
+            <pre class="code" data-lang="js"><code><span class="c">// @acme/ds/index.js exports 60 components</span>
+<span class="k">export</span> { Button } <span class="k">from</span> <span class="s">'./button/index.js'</span>;
+<span class="k">export</span> { DataGrid } <span class="k">from</span> <span class="s">'./data-grid/index.js'</span>;   <span class="c">// 80 KB</span>
+<span class="k">export</span> { RichTextEditor } <span class="k">from</span> <span class="s">'./editor/index.js'</span>; <span class="c">// 150 KB</span>
+<span class="c">// ...</span>
+
+<span class="c">// app.js</span>
+<span class="k">import</span> { Button } <span class="k">from</span> <span class="s">'@acme/ds'</span>;
+<span class="c">// With tree shaking: only Button (+ its deps) ends up in the bundle (~3 KB)</span>
+<span class="c">// Without it: all 60 components (~400 KB) ship to every user</span></code></pre>
+            <h4>What breaks tree shaking</h4>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Problem</th><th>Why</th><th>Fix</th></tr></thead>
+                <tbody>
+                  <tr><td>Publishing CommonJS only</td><td><code>require</code> and <code>module.exports</code> are dynamic, so the bundler can't analyse usage</td><td>Publish ESM (<code>"type": "module"</code>, an <code>exports</code> map)</td></tr>
+                  <tr><td>Top-level side effects</td><td>Code like <code>registerAll()</code> or <code>window.x = …</code> at module scope must be kept even if unused</td><td>Avoid them; declare <code>"sideEffects"</code> accurately</td></tr>
+                  <tr><td>Missing <code>sideEffects</code> field</td><td>The bundler must assume every file has side effects and keep it</td><td><code>"sideEffects": ["**/*.css"]</code> (CSS imports are real side effects)</td></tr>
+                  <tr><td>Exporting one big object</td><td><code>export default { Button, Grid }</code> is a single value; properties can't be dropped individually</td><td>Use named exports</td></tr>
+                  <tr><td>Bundling the library into one file</td><td>Cross-module boundaries are lost, and some bundlers keep more</td><td>Preserve modules in the build output (<code>preserveModules</code>)</td></tr>
+                  <tr><td>Class static members, decorators, IIFEs</td><td>Minifiers can't prove they're pure</td><td><code>/*#__PURE__*/</code> annotations; tools like tsup and Rollup add them</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <pre class="code" data-lang="json"><code>{
+  <span class="s">"name"</span>: <span class="s">"@acme/design-system"</span>,
+  <span class="s">"version"</span>: <span class="s">"5.3.0"</span>,
+  <span class="s">"type"</span>: <span class="s">"module"</span>,
+  <span class="s">"sideEffects"</span>: [<span class="s">"**/*.css"</span>],
+  <span class="s">"exports"</span>: {
+    <span class="s">"."</span>:        { <span class="s">"types"</span>: <span class="s">"./dist/index.d.ts"</span>,        <span class="s">"import"</span>: <span class="s">"./dist/index.js"</span> },
+    <span class="s">"./button"</span>: { <span class="s">"types"</span>: <span class="s">"./dist/button/index.d.ts"</span>, <span class="s">"import"</span>: <span class="s">"./dist/button/index.js"</span> },
+    <span class="s">"./tokens.css"</span>: <span class="s">"./dist/tokens.css"</span>
+  },
+  <span class="s">"peerDependencies"</span>: { <span class="s">"react"</span>: <span class="s">"^18.2.0 || ^19.0.0"</span>, <span class="s">"react-dom"</span>: <span class="s">"^18.2.0 || ^19.0.0"</span> }
+}</code></pre>
+            <p><strong>Verify it in CI:</strong> use size-limit with per-import budgets (<code>import { Button } from '@acme/ds'</code> must stay under 5 KB), so a regression such as an accidental side effect fails the PR.</p>
+          </div>
+
+          <div class="subsection">
+            <h3>What WCAG is</h3>
+            <p>The <strong>Web Content Accessibility Guidelines (WCAG)</strong> are the international standard for web accessibility, published by the W3C's Web Accessibility Initiative (WAI). The current version is <strong>WCAG 2.2</strong> (October 2023). WCAG 3 is a long-term draft. WCAG is the basis for most laws and procurement rules: the ADA (US, applied by courts and DOJ rules), Section 508 (US federal), EN 301 549 (EU), and the <strong>European Accessibility Act</strong>, enforced from June 2025.</p>
+            <h4>Four principles: POUR</h4>
+            <div class="card-grid">
+              <div class="card"><div class="card-label">Perceivable</div><p>Users can perceive the content: text alternatives, captions, sufficient contrast, content that adapts.</p></div>
+              <div class="card c-teal"><div class="card-label">Operable</div><p>Everything works by keyboard, with enough time, no seizure-inducing flashes, clear navigation and focus.</p></div>
+              <div class="card c-amber"><div class="card-label">Understandable</div><p>Readable text, predictable behaviour, helpful error identification and recovery.</p></div>
+              <div class="card c-violet"><div class="card-label">Robust</div><p>Works with assistive technologies: valid semantics, correct name, role and value.</p></div>
+            </div>
+            <h4>Conformance levels</h4>
+            <ul>
+              <li><strong>Level A:</strong> the minimum. Without it, some users can't use the content at all.</li>
+              <li><strong>Level AA:</strong> the standard target for laws and most companies. <em>This is what a design system should guarantee.</em></li>
+              <li><strong>Level AAA:</strong> the highest. Not required as a whole, since some criteria can't be met for all content.</li>
+            </ul>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Criterion (examples)</th><th>Level</th><th>Requirement</th></tr></thead>
+                <tbody>
+                  <tr><td>1.1.1 Non-text content</td><td>A</td><td>Images have text alternatives (<code>alt</code>)</td></tr>
+                  <tr><td>1.4.3 Contrast (minimum)</td><td>AA</td><td>Text contrast ≥ 4.5:1; large text ≥ 3:1</td></tr>
+                  <tr><td>1.4.11 Non-text contrast</td><td>AA</td><td>UI components and focus indicators ≥ 3:1</td></tr>
+                  <tr><td>2.1.1 Keyboard</td><td>A</td><td>All functionality is available from a keyboard</td></tr>
+                  <tr><td>2.4.7 Focus visible</td><td>AA</td><td>The keyboard focus indicator is visible</td></tr>
+                  <tr><td>2.4.11 Focus not obscured <em>(new in 2.2)</em></td><td>AA</td><td>The focused element isn't hidden by sticky headers or overlays</td></tr>
+                  <tr><td>2.5.8 Target size (minimum) <em>(new in 2.2)</em></td><td>AA</td><td>Pointer targets are at least 24×24 CSS px (or have enough spacing)</td></tr>
+                  <tr><td>3.3.1 Error identification</td><td>A</td><td>Errors are identified and described in text</td></tr>
+                  <tr><td>4.1.2 Name, role, value</td><td>A</td><td>Custom controls expose correct accessibility semantics</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="subsection">
+            <h3>Enforcing WCAG automatically in CI</h3>
+            <p>Automated tools catch roughly <strong>30–40% of WCAG issues</strong> (contrast, missing labels, invalid ARIA, missing alt text). The rest needs humans: logical focus order, meaningful alt text, screen-reader experience. So the strategy is <strong>defence in depth</strong>: automate everything that can be automated, at every layer, and audit the rest regularly.</p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Layer</th><th>Tool</th><th>Catches</th><th>Gate</th></tr></thead>
+                <tbody>
+                  <tr><td>Design tokens</td><td>Contrast checks in the token pipeline</td><td>Foreground/background pairs below 4.5:1 or 3:1</td><td>Token PR fails</td></tr>
+                  <tr><td>Editor and lint</td><td><code>eslint-plugin-jsx-a11y</code> + custom design system rules</td><td>Missing alt, click handlers on divs, invalid ARIA</td><td>Pre-commit and PR</td></tr>
+                  <tr><td>Component unit tests</td><td><code>jest-axe</code> / <code>vitest-axe</code></td><td>Rendered markup violations per state</td><td>PR</td></tr>
+                  <tr><td>Every Storybook story</td><td>Storybook a11y addon + test runner (axe)</td><td>Each variant and state (disabled, error, open)</td><td>PR</td></tr>
+                  <tr><td>Integrated pages</td><td><code>@axe-core/playwright</code> on key journeys, with keyboard-only E2E flows</td><td>Composition issues, focus traps, landmark structure</td><td>PR or pre-deploy</td></tr>
+                  <tr><td>Production</td><td>Scheduled scans, user feedback channel</td><td>Content-authored issues (CMS images without alt)</td><td>Tickets and dashboard</td></tr>
+                  <tr><td>Manual</td><td>VoiceOver, NVDA, keyboard-only, 200% zoom audits</td><td>Everything automation can't judge</td><td>Before stable release; quarterly audits</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <pre class="code" data-lang="tsx"><code><span class="c">// Component test: every Dialog state must be violation-free</span>
+<span class="k">import</span> { render } <span class="k">from</span> <span class="s">'@testing-library/react'</span>;
+<span class="k">import</span> { axe } <span class="k">from</span> <span class="s">'vitest-axe'</span>;
+
+<span class="f">test</span>.<span class="f">each</span>([<span class="s">'default'</span>, <span class="s">'with-error'</span>, <span class="s">'loading'</span>])(<span class="s">'Dialog (%s) has no a11y violations'</span>, <span class="k">async</span> (state) =&gt; {
+  <span class="k">const</span> { baseElement } = <span class="f">render</span>(&lt;<span class="f">DialogStory</span> state={state} open /&gt;);
+  <span class="f">expect</span>(<span class="k">await</span> <span class="f">axe</span>(baseElement)).<span class="f">toHaveNoViolations</span>();
+});</code></pre>
+            <pre class="code" data-lang="ts"><code><span class="c">// Playwright: check a full journey against WCAG 2.2 A/AA rules</span>
+<span class="k">import</span> { test, expect } <span class="k">from</span> <span class="s">'@playwright/test'</span>;
+<span class="k">import</span> AxeBuilder <span class="k">from</span> <span class="s">'@axe-core/playwright'</span>;
+
+<span class="f">test</span>(<span class="s">'checkout is accessible'</span>, <span class="k">async</span> ({ page }) =&gt; {
+  <span class="k">await</span> page.<span class="f">goto</span>(<span class="s">'/checkout'</span>);
+  <span class="k">await</span> page.keyboard.<span class="f">press</span>(<span class="s">'Tab'</span>);                       <span class="c">// keyboard-only smoke check</span>
+  <span class="k">await</span> <span class="f">expect</span>(page.<span class="f">getByRole</span>(<span class="s">'link'</span>, { name: <span class="s">/skip to content/i</span> })).<span class="f">toBeFocused</span>();
+
+  <span class="k">const</span> results = <span class="k">await new</span> <span class="f">AxeBuilder</span>({ page })
+    .<span class="f">withTags</span>([<span class="s">'wcag2a'</span>, <span class="s">'wcag2aa'</span>, <span class="s">'wcag21a'</span>, <span class="s">'wcag21aa'</span>, <span class="s">'wcag22aa'</span>])
+    .<span class="f">exclude</span>(<span class="s">'#third-party-chat'</span>)                       <span class="c">// tracked separately with the vendor</span>
+    .<span class="f">analyze</span>();
+  <span class="f">expect</span>(results.violations).<span class="f">toEqual</span>([]);
+});</code></pre>
+            <pre class="code" data-lang="yaml"><code><span class="c"># .github/workflows/a11y.yml (excerpt)</span>
+- name: Lint (jsx-a11y)
+  run: pnpm nx affected -t lint --base=origin/main
+- name: Storybook accessibility tests
+  run: pnpm nx run design-system:test-storybook --ci   <span class="c"># axe runs on every story</span>
+- name: Page-level axe checks
+  run: pnpm nx affected -t e2e-a11y --base=origin/main</code></pre>
+            <div class="callout tip"><div class="callout-title">Rolling this out to an existing codebase</div><p>Turning on a hard gate on day one with 2,000 existing violations just gets the check disabled. Record a <strong>baseline</strong> of current violations, fail only on <strong>new</strong> ones, publish a per-team burn-down dashboard, and fix the worst issues first (critical journeys, then high-traffic pages). Because design system components are accessible by default, every migration onto the system removes violations for free.</p></div>
+          </div>
+
+          <div class="subsection">
+            <h3>Interviewer follow-ups</h3>
+            <div class="qa-toolbar"><button class="text-btn" data-expand>Expand all</button></div>
+            <details class="qa">
+              <summary>A product team forked the Button because they needed a variant urgently. How do you handle it?</summary>
+              <div class="qa-a"><p>Treat it as a signal that the system was too slow or too rigid, not as a policy violation. Understand the need. If it's generic, fast-track it as a new variant (possibly <code>experimental</code>). If it's one-off, show how to compose it with existing primitives. Then fix the process: an SLA for contribution reviews, clearer escape hatches, and a lint rule that flags forks so they're visible. Help them migrate back once the variant ships.</p></div>
+            </details>
+            <details class="qa">
+              <summary>How do you roll out a visual refresh (new brand) without breaking 40 apps?</summary>
+              <div class="qa-a"><p>Drive it through <strong>tokens</strong>. Components read CSS variables, so a new theme is mostly a new token set. Ship it behind a theme attribute (<code>data-theme="brand-2026"</code>) so apps can opt in and test with visual regression, then make it the default in a major release. Changes that need layout adjustments come with a migration guide, and if necessary a temporary compatibility theme.</p></div>
+            </details>
+            <details class="qa">
+              <summary>Barrel files: should the design system use them?</summary>
+              <div class="qa-a"><p>A root barrel (<code>index.ts</code> re-exporting everything) is convenient, and with ESM plus an accurate <code>sideEffects</code> field, modern production bundlers tree-shake it fine. The costs are elsewhere: dev servers and test runners may load every module (slow HMR and slow Jest), and one module with a side effect drags everything in. A good compromise is to provide both the root entry and per-component subpath exports (<code>@acme/ds/button</code>), keep modules side-effect-free, and verify with size-limit.</p></div>
             </details>
           </div>
         </section>
